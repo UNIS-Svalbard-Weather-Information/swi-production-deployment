@@ -5,7 +5,7 @@
   "components": {
     "swi-frontend": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-frontend",
-      "version": "0.0.0",  // <-- Trailing comma (invalid in some parsers)
-    }  // <-- Extra comma or missing property
+      "version": "0.0.0"
+    }
   }
 }
