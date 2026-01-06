@@ -72,47 +72,34 @@
 		"URL": "https://cryo.met.no/en/latest-ice-charts",
 		"author": [
 			{
-				"literal": "Met Norway"
+				"literal": "Nick Hughes"
 			},
 			{
-				"family": "Hughes",
-				"given": "Nick"
+				"literal": "Penelope Wagner"
 			},
 			{
-				"family": "Wagner",
-				"given": "Penelope"
+				"literal": "Trond Robertsen"
 			},
 			{
-				"family": "Robertsen",
-				"given": "Trond"
+				"literal": "Signe Alvarstein"
 			},
 			{
-				"family": "Alvarstein",
-				"given": "Signe"
+				"literal": "Odd-Ivar Olsen"
 			},
 			{
-				"family": "Olsen",
-				"given": "Odd-Ivar"
+				"literal": "Alistair Everett"
 			},
 			{
-				"family": "Everett",
-				"given": "Alistair"
+				"literal": "William Copeland"
 			},
 			{
-				"family": "Copeland",
-				"given": "William"
+				"literal": "Elena Bjørndalen"
 			},
 			{
-				"family": "Bjørndalen",
-				"given": "Elena"
+				"literal": "Ola Bakke Aashamar"
 			},
 			{
-				"family": "Aashamar",
-				"given": "Ola Bakke"
-			},
-			{
-				"family": "Ristesund",
-				"given": "Eirin Walstad"
+				"literal": "Eirin Walstad Ristesund"
 			}
 		]
 	},
@@ -126,16 +113,13 @@
 		"URL": "https://adc.met.no/datasets/10.21343/ebrw-w846",
 		"author": [
 			{
-				"family": "Frank",
-				"given": "Lukas"
+				"literal": "Lukas Frank"
 			},
 			{
-				"family": "Jonassen",
-				"given": "Marius Opsanger"
+				"literal": "Marius Opsanger Jonassen"
 			},
 			{
-				"family": "Remes",
-				"given": "Teresa"
+				"literal": "Teresa Remes"
 			}
 		],
 		"accessed": {
@@ -190,8 +174,7 @@
 		"URL": "https://kartkatalog.miljodirektoratet.no/Dataset/Details/3077?lang=en-us",
 		"author": [
 			{
-				"family": "Agency",
-				"given": "Norwegian Environment"
+				"literal": "Norwegian Environment Agency"
 			}
 		],
 		"issued": {
@@ -206,6 +189,7 @@
 		"id": "http://zotero.org/groups/6372852/items/25AKPQD9",
 		"type": "document",
 		"note": "map-layer",
+		"publisher": "Norwegian Environment Agency",
 		"title": "Landing areas in Svalbard",
 		"URL": "https://kartkatalog.miljodirektoratet.no/Dataset/Details/3078?lang=en-us",
 		"author": [
@@ -270,20 +254,16 @@
 		"title": "VARSOM: REGOBS - A Common Real-Time Picture of the Hazard Situation Shared by Mobile Information Technology",
 		"author": [
 			{
-				"family": "Engeset",
-				"given": "Rune Verpe"
+				"literal": "Rune Verpe Engeset"
 			},
 			{
-				"family": "Ekker",
-				"given": "Ragnar"
+				"literal": "Ragnar Ekker"
 			},
 			{
-				"family": "Humstad",
-				"given": "Tore"
+				"literal": "Tore Humstad"
 			},
 			{
-				"family": "Landrø",
-				"given": "Markus"
+				"literal": "Markus Landrø"
 			}
 		],
 		"issued": {
@@ -359,9 +339,7 @@
 		"URL": "https://kart.ra.no/arcgis/rest/services/Distribusjon/Kulturminner20180301/MapServer",
 		"author": [
 			{
-				"family": "Svalbard",
-				"given": "Sysselmesteren",
-				"dropping-particle": "på"
+				"literal": "Sysselmesteren på Svalbard"
 			}
 		],
 		"issued": {
@@ -400,20 +378,16 @@
 		"URL": "https://openmetbuoy-arctic.com/isfjorden_moorings.html",
 		"author": [
 			{
-				"family": "Rabault",
-				"given": "Jean"
+				"literal": "Jean Rabault"
 			},
 			{
-				"family": "Müller",
-				"given": "Malte"
+				"literal": "Malte Müller"
 			},
 			{
-				"family": "Jonassen",
-				"given": "Marius"
+				"literal": "Marius Jonassen"
 			},
 			{
-				"family": "Skogseth",
-				"given": "Ragnheid"
+				"literal": "Ragnheid Skogseth"
 			}
 		],
 		"issued": {
