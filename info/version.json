@@ -1,6 +1,7 @@
 {
   "release": "dev-alpha",
   "release_name":"TheBestNameEver",
+  "release_date":"01/01/1970  "
   "components": {
     "swi-frontend": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-frontend",
