@@ -1,0 +1,427 @@
+[
+	{
+		"id": "http://zotero.org/groups/6372852/items/FF9MHNBZ",
+		"type": "document",
+		"note": "map-layer",
+		"publisher": "Norwegian Polar Institute",
+		"title": "Norwegian Polar Institute Map Data and Services",
+		"URL": "https://geodata.npolar.no/",
+		"author": [
+			{
+				"literal": "Norwegian Polar Institute"
+			}
+		],
+		"accessed": {
+			"date-parts": [
+				[
+					"2024",
+					1,
+					22
+				]
+			]
+		}
+	},
+	{
+		"id": "http://zotero.org/groups/6372852/items/JDX942DG",
+		"type": "document",
+		"abstract": "Bratthet er helning som er klassifisert i vise intervaller avhengig av formålet.",
+		"note": "map-layer",
+		"publisher": "NVE",
+		"title": "Bratthet",
+		"URL": "https://nve.geodataonline.no/arcgis/rest/services/Bratthet/MapServer",
+		"author": [
+			{
+				"literal": "IOPE"
+			}
+		],
+		"issued": {
+			"date-parts": [
+				[
+					"2024"
+				]
+			]
+		}
+	},
+	{
+		"id": "http://zotero.org/groups/6372852/items/BSSZ8BER",
+		"type": "document",
+		"abstract": "Utløpskartet viser hvor langt skred vanligvis pleier å gå og bidrar til sikrere rutevalg i skredterreng. Kombinert med bratthetskart kan det gi bedre forståelse av skredfare og mulig skredutbredelse.",
+		"note": "map-layer",
+		"publisher": "Varsom.no",
+		"title": "Utløpsområdekart",
+		"URL": "https://gis3.nve.no/arcgis/rest/services/wmts/KastWMTS/MapServer/",
+		"author": [
+			{
+				"literal": "Varsom.no"
+			}
+		],
+		"issued": {
+			"date-parts": [
+				[
+					"2023"
+				]
+			]
+		}
+	},
+	{
+		"id": "http://zotero.org/groups/6372852/items/UUFLSNMB",
+		"type": "document",
+		"note": "map-layer",
+		"publisher": "Norwegian Meteorological Institute (MET Norway) and Norwegian Ice Service (NIS)",
+		"title": "Latest Ice Charts",
+		"URL": "https://cryo.met.no/en/latest-ice-charts",
+		"author": [
+			{
+				"literal": "Met Norway"
+			},
+			{
+				"family": "Hughes",
+				"given": "Nick"
+			},
+			{
+				"family": "Wagner",
+				"given": "Penelope"
+			},
+			{
+				"family": "Robertsen",
+				"given": "Trond"
+			},
+			{
+				"family": "Alvarstein",
+				"given": "Signe"
+			},
+			{
+				"family": "Olsen",
+				"given": "Odd-Ivar"
+			},
+			{
+				"family": "Everett",
+				"given": "Alistair"
+			},
+			{
+				"family": "Copeland",
+				"given": "William"
+			},
+			{
+				"family": "Bjørndalen",
+				"given": "Elena"
+			},
+			{
+				"family": "Aashamar",
+				"given": "Ola Bakke"
+			},
+			{
+				"family": "Ristesund",
+				"given": "Eirin Walstad"
+			}
+		]
+	},
+	{
+		"id": "http://zotero.org/groups/6372852/items/Q99NWVE4",
+		"type": "dataset",
+		"note": "weather-observations",
+		"publisher": "Norwegian Meteorological Institute",
+		"title": "IWIN: The Isfjorden Weather Information Network",
+		"title-short": "IWIN",
+		"URL": "https://adc.met.no/datasets/10.21343/ebrw-w846",
+		"author": [
+			{
+				"family": "Frank",
+				"given": "Lukas"
+			},
+			{
+				"family": "Jonassen",
+				"given": "Marius Opsanger"
+			},
+			{
+				"family": "Remes",
+				"given": "Teresa"
+			}
+		],
+		"accessed": {
+			"date-parts": [
+				[
+					"2024",
+					11,
+					17
+				]
+			]
+		},
+		"issued": {
+			"date-parts": [
+				[
+					"2023"
+				]
+			]
+		}
+	},
+	{
+		"id": "http://zotero.org/groups/6372852/items/ZGVLJDH7",
+		"type": "document",
+		"note": "weather-observations",
+		"publisher": "Norwegian Meteorological Institute",
+		"title": "Frost API",
+		"URL": "https://frost.met.no/",
+		"author": [
+			{
+				"literal": "Norwegian Meteorological Institute (MET Norway)"
+			}
+		]
+	},
+	{
+		"id": "http://zotero.org/groups/6372852/items/LEY7W62V",
+		"type": "document",
+		"note": "weather-observations",
+		"publisher": "Holfuy",
+		"title": "Holfuy API",
+		"URL": "https://api.holfuy.com/",
+		"author": [
+			{
+				"literal": "Holfuy"
+			}
+		]
+	},
+	{
+		"id": "http://zotero.org/groups/6372852/items/J7BWQ5XJ",
+		"type": "document",
+		"note": "map-layer",
+		"publisher": "Norwegian Environment Agency",
+		"title": "Regler for motorferdsel på Svalbard",
+		"URL": "https://kartkatalog.miljodirektoratet.no/Dataset/Details/3077?lang=en-us",
+		"author": [
+			{
+				"family": "Agency",
+				"given": "Norwegian Environment"
+			}
+		],
+		"issued": {
+			"date-parts": [
+				[
+					"2025"
+				]
+			]
+		}
+	},
+	{
+		"id": "http://zotero.org/groups/6372852/items/25AKPQD9",
+		"type": "document",
+		"note": "map-layer",
+		"title": "Landing areas in Svalbard",
+		"URL": "https://kartkatalog.miljodirektoratet.no/Dataset/Details/3078?lang=en-us",
+		"author": [
+			{
+				"literal": "Norwegian Environment Agency"
+			}
+		],
+		"issued": {
+			"date-parts": [
+				[
+					"2025"
+				]
+			]
+		}
+	},
+	{
+		"id": "http://zotero.org/groups/6372852/items/XFHF59QT",
+		"type": "document",
+		"note": "elevation-api",
+		"publisher": "npolar.no",
+		"title": "Terrengmodell Svalbard (S0 Terrengmodell)",
+		"URL": "https://data.npolar.no/dataset/dce53a47-c726-4845-85c3-a65b46fe2fea",
+		"author": [
+			{
+				"literal": "Norwegian Polar Institute (Npolar.No)"
+			}
+		],
+		"issued": {
+			"date-parts": [
+				[
+					"2014"
+				]
+			]
+		}
+	},
+	{
+		"id": "http://zotero.org/groups/6372852/items/2F3ZRFA5",
+		"type": "document",
+		"note": "map-layer",
+		"title": "Avalanche Warnings",
+		"URL": "https://www.varsom.no/en/avalanches/avalanche-warnings/",
+		"author": [
+			{
+				"literal": "Varsom"
+			}
+		],
+		"issued": {
+			"date-parts": [
+				[
+					"2024"
+				]
+			]
+		}
+	},
+	{
+		"id": "http://zotero.org/groups/6372852/items/LDRSLELX",
+		"type": "paper-conference",
+		"container-title": "Proceedings of the International Snow Science Workshop",
+		"event-place": "Innsbruck, Austria",
+		"note": "avalanche-forecast, map-layer",
+		"publisher-place": "Innsbruck, Austria",
+		"title": "VARSOM: REGOBS - A Common Real-Time Picture of the Hazard Situation Shared by Mobile Information Technology",
+		"author": [
+			{
+				"family": "Engeset",
+				"given": "Rune Verpe"
+			},
+			{
+				"family": "Ekker",
+				"given": "Ragnar"
+			},
+			{
+				"family": "Humstad",
+				"given": "Tore"
+			},
+			{
+				"family": "Landrø",
+				"given": "Markus"
+			}
+		],
+		"issued": {
+			"date-parts": [
+				[
+					"2018"
+				]
+			]
+		}
+	},
+	{
+		"id": "http://zotero.org/groups/6372852/items/IRYF5XSE",
+		"type": "document",
+		"note": "map-layer",
+		"title": "World Imagery MapServer",
+		"URL": "https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer",
+		"author": [
+			{
+				"literal": "Esri"
+			}
+		],
+		"issued": {
+			"date-parts": [
+				[
+					"2023"
+				]
+			]
+		}
+	},
+	{
+		"id": "http://zotero.org/groups/6372852/items/3BDTNS62",
+		"type": "document",
+		"note": "map-layer",
+		"title": "Geological Map of Svalbard",
+		"URL": "https://geodata.npolar.no/arcgis/rest/services/Temadata/G_Geologi_Svalbard_S250_S750/MapServer",
+		"author": [
+			{
+				"literal": "Norwegian Polar Institute"
+			}
+		],
+		"issued": {
+			"date-parts": [
+				[
+					"2023"
+				]
+			]
+		}
+	},
+	{
+		"id": "http://zotero.org/groups/6372852/items/W8M44WAZ",
+		"type": "document",
+		"note": "map-layer",
+		"title": "Nature Reserves of Svalbard",
+		"URL": "https://geodata.npolar.no/arcgis/rest/services/Temadata/N_Nature_Reserves_Svalbard/MapServer",
+		"author": [
+			{
+				"literal": "Norwegian Polar Institute"
+			}
+		],
+		"issued": {
+			"date-parts": [
+				[
+					"2023"
+				]
+			]
+		}
+	},
+	{
+		"id": "http://zotero.org/groups/6372852/items/LK9GSLG3",
+		"type": "document",
+		"note": "map-layer",
+		"title": "Cultural heritage of Svalbard",
+		"URL": "https://kart.ra.no/arcgis/rest/services/Distribusjon/Kulturminner20180301/MapServer",
+		"author": [
+			{
+				"family": "Svalbard",
+				"given": "Sysselmesteren",
+				"dropping-particle": "på"
+			}
+		],
+		"issued": {
+			"date-parts": [
+				[
+					"2025"
+				]
+			]
+		}
+	},
+	{
+		"id": "http://zotero.org/groups/6372852/items/4QF8ED9B",
+		"type": "document",
+		"note": "map-layer",
+		"title": "Traffic regulations of Svalbard",
+		"URL": "https://geodata.npolar.no/arcgis/rest/services/Temadata/Transportation_Svalbard/MapServer",
+		"author": [
+			{
+				"literal": "Norwegian Polar Institute"
+			}
+		],
+		"issued": {
+			"date-parts": [
+				[
+					"2025"
+				]
+			]
+		}
+	},
+	{
+		"id": "http://zotero.org/groups/6372852/items/GG8DUW5S",
+		"type": "document",
+		"note": "weather-observations",
+		"publisher": "Norwegian Meteorological Institute and The University Center in Svalbard",
+		"title": "Isfjorden Mooring Open Met Buoy Data (IWOOS Project)",
+		"URL": "https://openmetbuoy-arctic.com/isfjorden_moorings.html",
+		"author": [
+			{
+				"family": "Rabault",
+				"given": "Jean"
+			},
+			{
+				"family": "Müller",
+				"given": "Malte"
+			},
+			{
+				"family": "Jonassen",
+				"given": "Marius"
+			},
+			{
+				"family": "Skogseth",
+				"given": "Ragnheid"
+			}
+		],
+		"issued": {
+			"date-parts": [
+				[
+					"2025"
+				]
+			]
+		}
+	}
+]
