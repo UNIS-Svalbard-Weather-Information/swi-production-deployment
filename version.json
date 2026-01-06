@@ -1,0 +1,10 @@
+{
+  "release": "dev-alpha",
+  "release_name":"TheBestNameEver",
+  "components": {
+    "swi-frontend": {
+      "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-frontend",
+      "version": "0.0.0"
+    }
+  }
+}
