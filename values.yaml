@@ -1,5 +1,5 @@
 global:
-  host: "localhost"
+  host: "swi.no"
 
 swi-metobs-backend:
   enable: true
@@ -9,6 +9,7 @@ swi-metobs-backend:
       - paths:
           - path: /public
             pathType: Prefix
+        subhost: "apis"
 
 
 swi-elevationapi:
@@ -19,3 +20,4 @@ swi-elevationapi:
       - paths:
           - path: /oeapi
             pathType: Prefix
+        subhost: "apis"

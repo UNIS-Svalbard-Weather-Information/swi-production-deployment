@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: swi-elevationapi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: swi-elevationapi
+  template:
+    metadata:
+      labels:
+        app: swi-elevationapi
+    spec:
+      containers:
+        - name: swi-elevationapi
+          image: "{{ .Values.image.repository }}:{{ .Values.version }}"
+          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          volumeMounts:
+            - name: {{ .Values.volumes.name }}
+              mountPath: {{ .Values.volumes.mountPath }}
+      volumes:
+        - name: elevationapivolume
+          persistentVolumeClaim:
+            claimName: elevationapivolume

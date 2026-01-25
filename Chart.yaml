@@ -6,3 +6,7 @@ dependencies:
   - name: swi-metobs-backend
     version: 0.1.0
     condition: swi-metobs-backend.enable
+  - name: swi-elevationapi
+    version: 0.1.0
+    condition: swi-elevationapi.enable
+
