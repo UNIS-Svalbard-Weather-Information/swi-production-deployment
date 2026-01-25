@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: swi-metobs-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: swi-metobs-backend
+  template:
+    metadata:
+      labels:
+        app: swi-metobs-backend
+    spec:
+      containers:
+        - name: swi-metobs-backend
+          image: "{{ .Values.image.repository }}:{{ .Values.version }}"
+          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          env:
+            - name: API_ROOT_PATH
+              value: "{{ .Values.environment.API_ROOT_PATH }}"
+          volumeMounts:
+            - name: metobsvolume
+              mountPath: /swi/data
+      volumes:
+        - name: metobsvolume
+          persistentVolumeClaim:
+            claimName: metobsvolume

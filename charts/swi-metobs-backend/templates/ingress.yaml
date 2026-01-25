@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.ingress.name | default "metobs-api-ingress" | quote }}
+  annotations:
+    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+spec:
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- toYaml .Values.ingress.tls | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: "{{ if .subhost }}{{ .subhost }}.{{ end }}{{ $.Values.global.host }}"
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path | default "/public" | quote }}
+            pathType: {{ .pathType | default "Prefix" | quote }}
+            backend:
+              service:
+                name: swi-metobs-backend
+                port:
+                  number: {{ $.Values.service.port }}
+          {{- end }}
+    {{- end }}

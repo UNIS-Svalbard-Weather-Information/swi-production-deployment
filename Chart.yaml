@@ -1,0 +1,8 @@
+# Chart.yaml
+apiVersion: v2
+name: Svalbard Weather Information
+version: 1.0.0
+dependencies:
+  - name: swi-metobs-backend
+    version: 0.1.0
+    condition: swi-metobs-backend.enable

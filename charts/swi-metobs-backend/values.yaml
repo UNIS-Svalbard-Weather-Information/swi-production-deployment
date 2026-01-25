@@ -1,0 +1,33 @@
+global:
+  host: chart-example.local
+
+version: 3.0.3
+
+image:
+  repository: ghcr.io/unis-svalbard-weather-information/swi-metobs-backend
+  pullPolicy: IfNotPresent
+
+environment:
+  API_ROOT_PATH: "/public"
+
+volumes:
+  - name: metobsvolume
+    mountPath: /swi/data
+
+networks:
+  - swi_network
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  name: metobs-api-ingress
+  annotations: {}
+  hosts:
+    - subhost: ""
+      paths:
+        - path: /public
+          pathType: Prefix
+  tls: []

@@ -1,0 +1,21 @@
+global:
+  host: "localhost"
+
+swi-metobs-backend:
+  enable: true
+  version: 3.0.3
+  ingress:
+      hosts:
+      - paths:
+          - path: /public
+            pathType: Prefix
+
+
+swi-elevationapi:
+  enable: true
+  version: 0.0.1
+  ingress:
+      hosts:
+      - paths:
+          - path: /oeapi
+            pathType: Prefix
