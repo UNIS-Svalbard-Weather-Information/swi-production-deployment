@@ -19,9 +19,12 @@ spec:
           env:
             - name: API_ROOT_PATH
               value: "{{ .Values.environment.API_ROOT_PATH }}"
+            - name: CORS_ALLOWED_ORIGINS
+              value: "{{ .Values.global.cors_allowed_origin }}"
           volumeMounts:
-            - name: metobsvolume
-              mountPath: /swi/data
+            - name: {{ .Values.volumes.name }}
+              mountPath: {{ .Values.volumes.mountPath }}
+              readOnly: {{ .Values.volumes.readOnly }}
       volumes:
         - name: metobsvolume
           persistentVolumeClaim:

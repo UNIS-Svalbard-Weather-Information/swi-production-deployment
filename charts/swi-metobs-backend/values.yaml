@@ -1,5 +1,6 @@
 global:
   host: chart-example.local
+  cors_allowed_origin: "*"
 
 version: 3.0.3
 
@@ -11,8 +12,9 @@ environment:
   API_ROOT_PATH: "/public"
 
 volumes:
-  - name: metobsvolume
-    mountPath: /swi/data
+  name: metobsvolume
+  mountPath: /swi/data
+  readOnly: true
 
 networks:
   - swi_network

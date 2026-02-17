@@ -1,5 +1,6 @@
 global:
   host: "swi.no"
+  cors_allowed_origin: "*"
 
 swi-metobs-backend:
   enable: true

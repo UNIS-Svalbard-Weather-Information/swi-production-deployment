@@ -1,5 +1,6 @@
 global:
   host: chart-example.local
+  cors_allowed_origin: "*"
 
 version: 0.0.1
 
@@ -10,6 +11,7 @@ image:
 volumes:
   name: elevationapivolume
   mountPath: /code/data
+  readOnly: false
 
 networks:
   - swi_network

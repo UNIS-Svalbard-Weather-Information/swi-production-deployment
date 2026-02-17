@@ -19,6 +19,10 @@ spec:
           volumeMounts:
             - name: {{ .Values.volumes.name }}
               mountPath: {{ .Values.volumes.mountPath }}
+              readOnly: {{ .Values.volumes.readOnly }}
+          env:
+            - name: CORS_ALLOWED_ORIGINS
+              value: "{{ .Values.global.cors_allowed_origin }}"
       volumes:
         - name: elevationapivolume
           persistentVolumeClaim:
