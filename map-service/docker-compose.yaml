@@ -2,7 +2,6 @@ name: SW-SWI-SRM MapServices
 
 
 services:
-
   redis:
     image: redis:${REDIS-VERSION:-7.4-alpine}
     restart: always
@@ -50,18 +49,36 @@ services:
       - redis
 
 
-## CRON TASK
+### CRON TASK
+## SeaIce
 # Add crontask container /swi/run-cron.sh
 # Min version 0.0.8
-  CRON_seaice_cache_mapproxy:
+  CRON_seaice_cache:
     image: ghcr.io/unis-svalbard-weather-information/swi-mapcache-seaice:${SWI-MAPCACHE-SEAICE-VERSION:-latest}
     volumes:
       - map-data:/swi/export
       - map-metadata:/swi/metadata
     environment:
       - DOCKER-CRON=1
+      - SWI-SEAICE-MONITORING-ENDPOINT=${SWI-SEAICE-MONITORING-ENDPOINT}
     depends_on:   
       - mapproxy-server
+
+## Avalanche
+# Add crontask container /swi/run-cron.sh
+# TODO: Finish avalanche cache setup
+  CRON_avalanche_cache:
+    image: docker pull ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:${SWI-AVALANCHE-CACHING-VERSION:-latest}
+    volumes:
+      - map-data:/swi/export
+      - map-metadata:/swi/metadata
+    environment:
+      - DOCKER-CRON=1
+      - SWI-AVALANCHE-MONITORING-ENDPOINT=${SWI-AVALANCHE-MONITORING-ENDPOINT}
+    depends_on:   
+      - mapproxy-server
+
+
 
 
 volumes:
