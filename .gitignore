@@ -1,0 +1,5 @@
+# Ignore all .env files
+.env
+# Except version.env and .env.example
+!.env.example
+!version.env
