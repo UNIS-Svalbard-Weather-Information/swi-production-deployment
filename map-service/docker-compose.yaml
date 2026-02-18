@@ -72,6 +72,7 @@ services:
     volumes:
       - map-data:/swi/export
       - map-metadata:/swi/metadata
+      - aval-raster-cache:/swi/static
     environment:
       - DOCKER-CRON=1
       - SWI-AVALANCHE-MONITORING-ENDPOINT=${SWI-AVALANCHE-MONITORING-ENDPOINT}
@@ -87,6 +88,9 @@ volumes:
   map-data:
 
   map-metadata:
+
+  aval-raster-cache:
+    driver: local
 
   redis_data:
     driver: local
