@@ -23,6 +23,9 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: PIP Install
+        run: pip install pyyaml
+
       - name: Run Python script
         id: run-script
         run: python update-info.py | tee output.txt
