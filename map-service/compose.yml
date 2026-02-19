@@ -26,7 +26,7 @@ services:
 
 # MapProxy service serving the WMTS service
   mapproxy-server:
-    image: ghcr.io/unis-svalbard-weather-information/swi-mapproxy:${SWI_MAPPROXY_VERSION:-latest}
+    image: ghcr.io/unis-svalbard-weather-information/swi-mapproxy:0.0.6
     volumes:
       - map-data:/mapproxy/data
       - map-metadata:/mapproxy/metadata
@@ -56,7 +56,7 @@ services:
 # Add crontask container /swi/run-cron.sh
 # Min version 0.0.8
   CRON_seaice_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-mapcache-seaice:${SWI_MAPCACHE_SEAICE_VERSION:-latest}
+    image: ghcr.io/unis-svalbard-weather-information/swi-mapcache-seaice:0.0.10
     volumes:
       - map-data:/swi/export
       - map-metadata:/swi/metadata
@@ -70,7 +70,7 @@ services:
 # Add crontask container /swi/run-cron.sh
 # TODO: Finish avalanche cache setup
   CRON_avalanche_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:${SWI_AVALANCHE_CACHING_VERSION:-latest}
+    image: ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:0.0.3
     volumes:
       - map-data:/swi/data
       - map-metadata:/swi/metadata
