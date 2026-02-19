@@ -6,6 +6,21 @@
     "swi-frontend": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-frontend",
       "version": "0.0.0"
+    },
+    "swi-avalanche-caching" : {
+      "url" : "https://github.com/UNIS-Svalbard-Weather-Information/swi-avalanche-caching",
+      "version" : "0.0.3"
+
+    },
+    "swi-mapcache-seaice" : {
+      "url" : "https://github.com/UNIS-Svalbard-Weather-Information/swi-mapcache-seaice",
+      "version" : "0.0.9"
+
+    },
+    "swi-mapproxy" : {
+      "url" : "https://github.com/UNIS-Svalbard-Weather-Information/swi-mapproxy",
+      "version" : "0.0.6"
+
     }
   }
 }

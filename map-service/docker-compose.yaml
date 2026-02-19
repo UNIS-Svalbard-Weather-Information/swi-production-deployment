@@ -1,9 +1,9 @@
-name: SW-SWI-SRM MapServices
+name: SW-SWI-SRM-MapServices
 
 
 services:
   redis:
-    image: redis:${REDIS-VERSION:-7.4-alpine}
+    image: redis:${REDIS_VERSION:-7.4-alpine}
     restart: always
     ports:
       - "6379:6379"
@@ -26,11 +26,13 @@ services:
 
 # MapProxy service serving the WMTS service
   mapproxy-server:
-    image: ghcr.io/unis-svalbard-weather-information/swi-mapproxy:${SWI-MAPPROXY-VERSION:-latest}
+    image: ghcr.io/unis-svalbard-weather-information/swi-mapproxy:${SWI_MAPPROXY_VERSION:-latest}
     volumes:
       - map-data:/mapproxy/data
       - map-metadata:/mapproxy/metadata
-      - tiles-cache:/mapproxy/config/cache_data
+      - tiles-cache:/mapproxy/mbtiles/:rw
+    ports:
+      - 8080:8080
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
       interval: 60s
@@ -38,7 +40,7 @@ services:
       retries: 3
       start_period: 60s
     deploy:
-      replicas: 3
+      replicas: 1
     environment:
       - MAPPROXY_REDIS_HOST=redis
       - MAPPROXY_REDIS_PORT=6379
@@ -54,13 +56,13 @@ services:
 # Add crontask container /swi/run-cron.sh
 # Min version 0.0.8
   CRON_seaice_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-mapcache-seaice:${SWI-MAPCACHE-SEAICE-VERSION:-latest}
+    image: ghcr.io/unis-svalbard-weather-information/swi-mapcache-seaice:${SWI_MAPCACHE_SEAICE_VERSION:-latest}
     volumes:
       - map-data:/swi/export
       - map-metadata:/swi/metadata
     environment:
-      - DOCKER-CRON=1
-      - SWI-SEAICE-MONITORING-ENDPOINT=${SWI-SEAICE-MONITORING-ENDPOINT}
+      - DOCKER_CRON=1
+      - SWI_SEAICE_MONITORING_ENDPOINT=${SWI_SEAICE_MONITORING_ENDPOINT}
     depends_on:   
       - mapproxy-server
 
@@ -68,14 +70,14 @@ services:
 # Add crontask container /swi/run-cron.sh
 # TODO: Finish avalanche cache setup
   CRON_avalanche_cache:
-    image: docker pull ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:${SWI-AVALANCHE-CACHING-VERSION:-latest}
+    image: ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:${SWI_AVALANCHE_CACHING_VERSION:-latest}
     volumes:
-      - map-data:/swi/export
+      - map-data:/swi/data
       - map-metadata:/swi/metadata
       - aval-raster-cache:/swi/static
     environment:
-      - DOCKER-CRON=1
-      - SWI-AVALANCHE-MONITORING-ENDPOINT=${SWI-AVALANCHE-MONITORING-ENDPOINT}
+      - DOCKER_CRON=1
+      - SWI_AVALANCHE_MONITORING_ENDPOINT=${SWI_AVALANCHE_MONITORING_ENDPOINT}
     depends_on:   
       - mapproxy-server
 
