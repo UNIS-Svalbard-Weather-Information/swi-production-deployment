@@ -7,10 +7,6 @@
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-mapproxy",
       "version": "0.0.6"
     },
-    "swi-mapcache-seaice": {
-      "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-mapcache-seaice",
-      "version": "0.0.10"
-    },
     "swi-avalanche-caching": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-avalanche-caching",
       "version": "0.0.3"
