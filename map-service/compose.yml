@@ -54,7 +54,7 @@ services:
 ### CRON TASK
 ## SeaIce
 # Add crontask container /swi/run-cron.sh
-# Min version 0.0.8
+# Min version 0.0.10
   CRON_seaice_cache:
     image: ghcr.io/unis-svalbard-weather-information/swi-mapcache-seaice:0.0.10
     volumes:
@@ -68,7 +68,7 @@ services:
 
 ## Avalanche
 # Add crontask container /swi/run-cron.sh
-# TODO: Finish avalanche cache setup
+# Min version 0.0.3
   CRON_avalanche_cache:
     image: ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:0.0.3
     volumes:
