@@ -3,7 +3,7 @@ name: SW-SWI-SRM-MapServices
 
 services:
   redis:
-    image: redis:${REDIS_VERSION:-7.4-alpine}
+    image: redis:7.4-alpine
     restart: always
     ports:
       - "6379:6379"
