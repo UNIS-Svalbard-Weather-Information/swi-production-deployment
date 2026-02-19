@@ -3,17 +3,17 @@
   "release_name": "TheBestNameEver",
   "release_date": "1970-01-01",
   "components": {
-    "swi-mapproxy": {
+    "swi-mapproxy-test": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-mapproxy",
       "version": "0.0.6"
     },
-    "swi-mapcache-seaice": {
+    "swi-mapcache-seaice-test": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-mapcache-seaice",
       "version": "0.0.10"
     },
     "swi-avalanche-caching": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-avalanche-caching",
-      "version": "0.0.3"
+      "version": "0.0.2"
     }
   }
 }

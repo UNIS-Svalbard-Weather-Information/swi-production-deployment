@@ -38,24 +38,3 @@ jobs:
           git add ./info/*
           git diff-index --quiet HEAD || git commit -m "[BOT] Update services version"
           git push
-
-      - name: Comment PR with script output
-        if: github.event_name == 'push' && github.ref != 'refs/heads/main'
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const fs = require('fs');
-            const scriptOutput = fs.readFileSync('output.txt', 'utf8');
-            const prNumber = process.env.PR_NUMBER;
-
-            if (prNumber) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-                body: `Script output:\n\`\`\`\n${scriptOutput}\n\`\`\``
-              });
-            }
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
