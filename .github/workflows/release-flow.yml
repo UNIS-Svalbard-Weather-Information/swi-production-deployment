@@ -125,15 +125,23 @@ jobs:
           TARGET_BRANCH: main
           TITLE: "Release ${{ steps.bump_version.outputs.new_version }} (${{ steps.bump_version.outputs.version_name }})"
         run: |
-          # Use GitHub API to create a PR
-          curl -X POST \
+          response=$(curl -X POST \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
+            -w "%{http_code}" \
+            -o response_body.json \
             https://api.github.com/repos/${{ github.repository }}/pulls \
             -d '{
               "title": "'"$TITLE"'",
-              "body": "This PR was automatically created for the new branch `'"$SOURCE_BRANCH"'`.",
+              "body": "> ⚠️ **Warning**: Before merging, ensure the bibliography is updated.\n\n> ℹ️ **Info**: This branch (`'"$SOURCE_BRANCH"'`) is deployed in the pre-production environment.\n\nThis PR was automatically created for the release `'"$SOURCE_BRANCH"'`.",
               "head": "'"$SOURCE_BRANCH"'",
               "base": "'"$TARGET_BRANCH"'",
               "draft": false
-            }'
+            }')
+
+          # Check if the status code is 201 (success for PR creation)
+          if [ "$response" -ne 201 ]; then
+            echo "Failed to create PR. HTTP status: $response"
+            cat response_body.json
+            exit 1
+          fi
