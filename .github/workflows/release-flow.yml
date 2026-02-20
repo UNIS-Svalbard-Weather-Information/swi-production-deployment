@@ -1,0 +1,139 @@
+name: Release on Merge
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  release:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Update release date if needed
+        id: update_date
+        run: |
+          TODAY=$(date +'%Y-%m-%d')
+          CURRENT_DATE=$(jq -r '.release_date' info/version.json)
+
+          if [ "$CURRENT_DATE" != "$TODAY" ]; then
+            jq --arg d "$TODAY" '.release_date = $d' info/version.json > info/version.json.tmp && \
+               mv info/version.json.tmp info/version.json
+            echo "date_updated=true" >> $GITHUB_OUTPUT
+          else
+            echo "date_updated=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push date update (if needed)
+        if: steps.update_date.outputs.date_updated == 'true'
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add info/version.json
+          git commit -m "Update release date to $(date +'%Y-%m-%d')"
+          git push
+
+      - name: Get Version
+        id: get_version
+        run: |
+          # Read current version
+          VERSION=$(jq -r '.release' info/version.json)
+          VERSION_NAME=$(jq -r '.release_name' info/version.json)
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          release_name: ${{ steps.get_version.outputs.version }}
+          body: "Release ${{ steps.get_version.outputs.version_name }} version ${{ steps.bump_version.outputs.version }}"
+
+  new-version:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Bump version for next cycle
+        id: bump_version
+        run: |
+          # Read current version
+          VERSION=$(jq -r '.release' info/version.json)
+          VERSION_NAME=$(jq -r '.release_name' info/version.json)
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+
+          # Split version into base and suffix (e.g., 2.0.0-alpha1)
+          if [[ $VERSION =~ ^([0-9]+\.[0-9]+\.[0-9]+)-([a-z]+)([0-9]+)$ ]]; then
+            BASE=${BASH_REMATCH[1]}
+            SUFFIX=${BASH_REMATCH[2]}
+            NUM=${BASH_REMATCH[3]}
+            NEW_NUM=$((NUM + 1))
+            NEW_VERSION="${BASE}-${SUFFIX}${NEW_NUM}"
+          else
+            # If no suffix, increment Fix number
+            IFS='.' read -r -a parts <<< "$VERSION"
+            NEW_VERSION="${parts[0]}.${parts[1]}.$((parts[2] + 1))"
+          fi
+
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update version file
+        run: |
+          # Update version.json for the next cycle
+          echo "Before jq:"
+          cat info/version.json
+          jq --arg v "${{ steps.bump_version.outputs.new_version }}" '.release = $v' info/version.json > info/version.json.tmp
+          echo "After jq (tmp file):"
+          cat info/version.json.tmp
+          mv info/version.json.tmp info/version.json
+          echo "After mv:"
+          cat info/version.json
+
+      - name: Commit changes
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: "info/version.json"
+          default_author: github_actions
+          new_branch: "release/${{ steps.bump_version.outputs.new_version }}"
+          message: "Update version to ${{ steps.bump_version.outputs.new_version }}"
+
+      - name: Create Pull Request via API
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_BRANCH: "release/${{ steps.bump_version.outputs.new_version }}"
+          TARGET_BRANCH: main
+          TITLE: "Release ${{ steps.bump_version.outputs.new_version }} (${{ steps.bump_version.outputs.version_name }})"
+        run: |
+          # Use GitHub API to create a PR
+          curl -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/${{ github.repository }}/pulls \
+            -d '{
+              "title": "'"$TITLE"'",
+              "body": "This PR was automatically created for the new branch `'"$SOURCE_BRANCH"'`.",
+              "head": "'"$SOURCE_BRANCH"'",
+              "base": "'"$TARGET_BRANCH"'",
+              "draft": false
+            }'

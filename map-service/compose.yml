@@ -1,0 +1,98 @@
+name: SW-SWI-SRM-MapServices
+
+
+services:
+  redis:
+    image: redis:7.4-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    command: >
+      sh -c '
+      mkdir -p /usr/local/etc/redis &&
+      echo "user default on >$$REDIS_PASSWORD ~* +@all" > /usr/local/etc/redis/users.acl &&
+      exec redis-server --save 60 1 --loglevel warning --aclfile /usr/local/etc/redis/users.acl
+      '
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    environment:
+      REDIS_PASSWORD: ${MAPSERVICES_REDIS_PWD}
+
+
+# MapProxy service serving the WMTS service
+  mapproxy-server:
+    image: ghcr.io/unis-svalbard-weather-information/swi-mapproxy:0.0.6
+    volumes:
+      - map-data:/mapproxy/data
+      - map-metadata:/mapproxy/metadata
+      - tiles-cache:/mapproxy/mbtiles/:rw
+    ports:
+      - 8080:8080
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    deploy:
+      replicas: 1
+    environment:
+      - MAPPROXY_REDIS_HOST=redis
+      - MAPPROXY_REDIS_PORT=6379
+      - MAPPROXY_REDIS_USERNAME=default
+      - MAPPROXY_REDIS_PASSWORD=${MAPSERVICES_REDIS_PWD}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+    depends_on:
+      - redis
+
+
+### CRON TASK
+## SeaIce
+# Add crontask container /swi/run-cron.sh
+# Min version 0.0.10
+  CRON_seaice_cache:
+    image: ghcr.io/unis-svalbard-weather-information/swi-mapcache-seaice:0.0.10
+    volumes:
+      - map-data:/swi/export
+      - map-metadata:/swi/metadata
+    environment:
+      - DOCKER_CRON=1
+      - SWI_SEAICE_MONITORING_ENDPOINT=${SWI_SEAICE_MONITORING_ENDPOINT}
+    depends_on:   
+      - mapproxy-server
+
+## Avalanche
+# Add crontask container /swi/run-cron.sh
+# Min version 0.0.3
+  CRON_avalanche_cache:
+    image: ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:0.0.3
+    volumes:
+      - map-data:/swi/data
+      - map-metadata:/swi/metadata
+      - aval-raster-cache:/swi/static
+    environment:
+      - DOCKER_CRON=1
+      - SWI_AVALANCHE_MONITORING_ENDPOINT=${SWI_AVALANCHE_MONITORING_ENDPOINT}
+    depends_on:   
+      - mapproxy-server
+
+
+
+
+volumes:
+  tiles-cache:
+
+  map-data:
+
+  map-metadata:
+
+  aval-raster-cache:
+    driver: local
+
+  redis_data:
+    driver: local
