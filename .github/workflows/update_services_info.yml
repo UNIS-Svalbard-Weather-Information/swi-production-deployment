@@ -28,11 +28,32 @@ jobs:
 
       - name: Run Python script
         id: run-script
-        run: python update-info.py | tee output.txt
+        run: |
+          python update-info.py | tee output.txt
+          if grep -q "Up-to-date - Nothing to change" output.txt; then
+            echo "version-updated=false" >> $GITHUB_OUTPUT
+          else
+            echo "version-updated=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update release date if needed
+        id: update_date
+        run: |
+          TODAY=$(date +'%Y-%m-%d')
+          CURRENT_DATE=$(jq -r '.release_date' info/version.json)
+
+          if [ "$CURRENT_DATE" \< "$TODAY" ]; then
+            jq --arg d "$TODAY" '.release_date = $d' info/version.json > info/version.json.tmp && \
+              mv info/version.json.tmp info/version.json
+            echo "date_updated=true" >> $GITHUB_OUTPUT
+          else
+            echo "date_updated=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Commit changes
+        if: steps.run-script.outputs.version-updated == 'true' || steps.update_date.outputs.date_updated == 'true'
         uses: EndBug/add-and-commit@v9
         with:
           add: "info/version.json"
           default_author: github_actions
-          message: "[BOT] Update services version"
+          message: "[BOT] Update services version and release date"
