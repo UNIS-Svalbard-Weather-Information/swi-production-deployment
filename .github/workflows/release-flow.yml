@@ -9,14 +9,13 @@ jobs:
   release:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-          
-      - name: Install jq
-        run: sudo apt-get install jq
+          ref: main
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -36,7 +35,6 @@ jobs:
           else
             echo "date_updated=false" >> $GITHUB_OUTPUT
           fi
-      
 
       - name: Commit and push date update (if needed)
         if: steps.update_date.outputs.date_updated == 'true'
@@ -47,6 +45,33 @@ jobs:
           git commit -m "Update release date to $(date +'%Y-%m-%d')"
           git push
 
+      - name: Get Version
+        id: get_version
+        run: |
+          # Read current version
+          VERSION=$(jq -r '.release' info/version.json)
+          VERSION_NAME=$(jq -r '.release_name' info/version.json)
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          release_name: ${{ steps.get_version.outputs.version }}
+          body: "Release ${{ steps.get_version.outputs.version_name }} version ${{ steps.bump_version.outputs.version }}"
+
+  new-version:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Bump version for next cycle
         id: bump_version
@@ -73,18 +98,8 @@ jobs:
 
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Create GitHub Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.bump_version.outputs.version }}
-          release_name: ${{ steps.bump_version.outputs.version }}
-          body: "Release ${{ steps.bump_version.outputs.version_name }} version ${{ steps.bump_version.outputs.version }}"
-
-      - name: Create new branch and update version
+      - name: Update version file
         run: |
-          git checkout -b release/${{ steps.bump_version.outputs.new_version }}
           # Update version.json for the next cycle
           echo "Before jq:"
           cat info/version.json
@@ -94,19 +109,31 @@ jobs:
           mv info/version.json.tmp info/version.json
           echo "After mv:"
           cat info/version.json
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          git add info/version.json
-          git diff-index --quiet HEAD || (git commit -m "[BOT] Bump version to ${{ steps.bump_version.outputs.new_version }}" && echo "Commit created: Version bumped to ${{ steps.bump_version.outputs.new_version }}")
-          git push -u origin release/${{ steps.bump_version.outputs.new_version }}
 
-
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v5
+      - name: Commit changes
+        uses: EndBug/add-and-commit@v9
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "Bump version to ${{ steps.bump_version.outputs.new_version }}"
-          title: "Prepare release ${{ steps.bump_version.outputs.new_version }}"
-          body: "Automated PR for next release cycle."
-          branch: release/${{ steps.bump_version.outputs.new_version }}
-          base: main
+          add: "info/version.json"
+          default_author: github_actions
+          new_branch: "release/${{ steps.bump_version.outputs.new_version }}"
+          message: "Update version to ${{ steps.bump_version.outputs.new_version }}"
+
+      - name: Create Pull Request via API
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_BRANCH: "release/${{ steps.bump_version.outputs.new_version }}"
+          TARGET_BRANCH: main
+          TITLE: "Release ${{ steps.bump_version.outputs.new_version }} (${{ steps.bump_version.outputs.version_name }})"
+        run: |
+          # Use GitHub API to create a PR
+          curl -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/${{ github.repository }}/pulls \
+            -d '{
+              "title": "'"$TITLE"'",
+              "body": "This PR was automatically created for the new branch `'"$SOURCE_BRANCH"'`.",
+              "head": "'"$SOURCE_BRANCH"'",
+              "base": "'"$TARGET_BRANCH"'",
+              "draft": false
+            }'
