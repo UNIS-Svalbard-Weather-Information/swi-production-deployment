@@ -14,18 +14,49 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          
+      - name: Install jq
+        run: sudo apt-get install jq
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Bump version and update date
+      - name: Update release date if needed
+        id: update_date
+        run: |
+          TODAY=$(date +'%Y-%m-%d')
+          CURRENT_DATE=$(jq -r '.release_date' info/version.json)
+
+          if [ "$CURRENT_DATE" != "$TODAY" ]; then
+            jq --arg d "$TODAY" '.release_date = $d' info/version.json > info/version.json.tmp && \
+               mv info/version.json.tmp info/version.json
+            echo "date_updated=true" >> $GITHUB_OUTPUT
+          else
+            echo "date_updated=false" >> $GITHUB_OUTPUT
+          fi
+      
+
+      - name: Commit and push date update (if needed)
+        if: steps.update_date.outputs.date_updated == 'true'
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add info/version.json
+          git commit -m "Update release date to $(date +'%Y-%m-%d')"
+          git push
+
+
+      - name: Bump version for next cycle
         id: bump_version
         run: |
           # Read current version
           VERSION=$(jq -r '.release' info/version.json)
-          NAME=$(jq -r '.release_name' info/version.json)
+          VERSION_NAME=$(jq -r '.release_name' info/version.json)
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
 
           # Split version into base and suffix (e.g., 2.0.0-alpha1)
           if [[ $VERSION =~ ^([0-9]+\.[0-9]+\.[0-9]+)-([a-z]+)([0-9]+)$ ]]; then
@@ -40,36 +71,35 @@ jobs:
             NEW_VERSION="${parts[0]}.${parts[1]}.$((parts[2] + 1))"
           fi
 
-          TODAY=$(date +'%Y-%m-%d')
-
-          # Update version.json
-          jq --arg v "$NEW_VERSION" --arg d "$TODAY" \
-             '.release = $v | .release_date = $d' \
-             info/version.json > info/version.json.tmp && \
-             mv info/version.json.tmp info/version.json
-
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-
-      - name: Commit and push version bump
-        run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          git add info/version.json
-          git commit -m "Bump version to ${{ steps.bump_version.outputs.new_version }}"
-          git push
 
       - name: Create GitHub Release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ steps.bump_version.outputs.new_version }}
-          release_name: ${{ steps.bump_version.outputs.new_version }}
-          body: "Release ${{ steps.bump_version.outputs.new_version }}"
+          tag_name: ${{ steps.bump_version.outputs.version }}
+          release_name: ${{ steps.bump_version.outputs.version }}
+          body: "Release ${{ steps.bump_version.outputs.version_name }} version ${{ steps.bump_version.outputs.version }}"
 
-      - name: Create new branch for next release
+      - name: Create new branch and update version
         run: |
           git checkout -b release/${{ steps.bump_version.outputs.new_version }}
+          # Update version.json for the next cycle
+          echo "Before jq:"
+          cat info/version.json
+          jq --arg v "${{ steps.bump_version.outputs.new_version }}" '.release = $v' info/version.json > info/version.json.tmp
+          echo "After jq (tmp file):"
+          cat info/version.json.tmp
+          mv info/version.json.tmp info/version.json
+          echo "After mv:"
+          cat info/version.json
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add info/version.json
+          git diff-index --quiet HEAD || (git commit -m "[BOT] Bump version to ${{ steps.bump_version.outputs.new_version }}" && echo "Commit created: Version bumped to ${{ steps.bump_version.outputs.new_version }}")
+          git push -u origin release/${{ steps.bump_version.outputs.new_version }}
+
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
