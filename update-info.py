@@ -50,17 +50,26 @@ def compare_dicts(old, new):
 def display_changes(old, new):
     new_entries, removed_entries, updated_entries = compare_dicts(old, new)
 
-    print("=== New entries (green) ===")
-    for k, v in new_entries.items():
-        print(f"\033[92m{k}: {v}\033[0m")  # Green
+    if not new_entries and not removed_entries and not updated_entries:
+        print("Up-to-date - Nothing to change")
+        return
 
-    print("\n=== Removed entries (red) ===")
-    for k, v in removed_entries.items():
-        print(f"\033[91m{k}: {v}\033[0m")  # Red
+    if new_entries:
+        print("=== New entries (green) ===")
+        for k, v in new_entries.items():
+            print(f"\033[92m{k}: {v}\033[0m")  # Green
 
-    print("\n=== Updated entries (blue) ===")
-    for k, (old_v, new_v) in updated_entries.items():
-        print(f"\033[94m{k}: {old_v} → {new_v}\033[0m")  # Blue
+    if removed_entries:
+        print("\n=== Removed entries (red) ===")
+        for k, v in removed_entries.items():
+            print(f"\033[91m{k}: {v}\033[0m")  # Red
+
+    if updated_entries:
+        print("\n=== Updated entries (blue) ===")
+        for k, (old_v, new_v) in updated_entries.items():
+            print(f"\033[94m{k}: {old_v} → {new_v}\033[0m")  # Blue
+
+    print("info/version.json updated successfully.")
 
 
 def update_version_json(versions):
@@ -99,4 +108,3 @@ def update_version_json(versions):
 if __name__ == "__main__":
     versions = extract_versions_from_compose()
     update_version_json(versions)
-    print("info/version.json updated successfully.")
