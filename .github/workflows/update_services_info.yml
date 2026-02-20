@@ -42,9 +42,9 @@ jobs:
           TODAY=$(date +'%Y-%m-%d')
           CURRENT_DATE=$(jq -r '.release_date' info/version.json)
 
-          if [ "$CURRENT_DATE" != "$TODAY" ]; then
+          if [ "$CURRENT_DATE" \< "$TODAY" ]; then
             jq --arg d "$TODAY" '.release_date = $d' info/version.json > info/version.json.tmp && \
-               mv info/version.json.tmp info/version.json
+              mv info/version.json.tmp info/version.json
             echo "date_updated=true" >> $GITHUB_OUTPUT
           else
             echo "date_updated=false" >> $GITHUB_OUTPUT
