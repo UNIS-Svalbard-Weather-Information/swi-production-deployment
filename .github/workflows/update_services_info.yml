@@ -30,7 +30,7 @@ jobs:
         id: run-script
         run: |
           python update-info.py | tee output.txt
-          if grep -q "OK" output.txt; then
+          if grep -q "Up-to-date - Nothing to change" output.txt; then
             echo "version-updated=false" >> $GITHUB_OUTPUT
           else
             echo "version-updated=true" >> $GITHUB_OUTPUT
