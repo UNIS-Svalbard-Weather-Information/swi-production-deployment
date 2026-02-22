@@ -34,7 +34,7 @@ services:
       - tiles-cache:/mapproxy/mbtiles/:rw
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.mapproxy-server.rule=Host(`${SWI_MAPPROXY_ENDPOINT?Variable not set}`)"
+      - "traefik.http.routers.mapproxy-server.rule=Host(`${SWI_MAPPROXY_HOST?Variable not set}`)"
       - "traefik.http.routers.mapproxy-server.entrypoints=web"
       - "traefik.http.services.mapproxy-server.loadbalancer.server.port=8080"
       - "traefik.docker.network=proxy"
@@ -47,7 +47,7 @@ services:
 
       # Additional headers middleware
       - "traefik.http.middlewares.mapproxyheaders.headers.customrequestheaders.X-Forwarded-Proto=http"
-      - "traefik.http.middlewares.mapproxyheaders.headers.customrequestheaders.X-Forwarded-Host=${SWI_MAPPROXY_ENDPOINT?Variable not set}"
+      - "traefik.http.middlewares.mapproxyheaders.headers.customrequestheaders.X-Forwarded-Host=${SWI_MAPPROXY_HOST?Variable not set}"
       - "traefik.http.middlewares.mapproxyheaders.headers.customresponseheaders.Cache-Control=public, max-age=60, s-maxage=60"
 
       # Apply middlewares
