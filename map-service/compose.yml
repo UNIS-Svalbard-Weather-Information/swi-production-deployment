@@ -27,7 +27,7 @@ services:
 
 
   mapproxy-server:
-    image: ghcr.io/unis-svalbard-weather-information/swi-mapproxy:0.0.11
+    image: ghcr.io/unis-svalbard-weather-information/swi-mapproxy:trixie-p3.13-mp6.0.1-0.0.12
     volumes:
       - map-data:/mapproxy/data
       - map-metadata:/mapproxy/metadata
@@ -37,7 +37,7 @@ services:
       - "traefik.http.routers.mapproxy-server.rule=Host(`${SWI_MAPPROXY_ENDPOINT?Variable not set}`)"
       - "traefik.http.routers.mapproxy-server.entrypoints=web"
       - "traefik.http.services.mapproxy-server.loadbalancer.server.port=8080"
-      - "traefik.d  ocker.network=proxy"
+      - "traefik.docker.network=proxy"
 
       # CORS middleware
       - "traefik.http.middlewares.mapproxycors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
@@ -64,6 +64,7 @@ services:
       start_period: 60s
     deploy:
       replicas: 3
+    restart: always
     environment:
       - MAPPROXY_REDIS_HOST=redis
       - MAPPROXY_REDIS_PORT=6379
