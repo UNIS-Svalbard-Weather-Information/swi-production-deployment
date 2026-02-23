@@ -35,7 +35,8 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.mapproxy-server.rule=Host(`${SWI_MAPPROXY_HOST?Variable not set}`)"
-      - "traefik.http.routers.mapproxy-server.entrypoints=web"
+      - "traefik.http.routers.mapproxy-server.entrypoints=websecure"
+      - "traefik.http.routers.mapproxy-server.tls=true"
       - "traefik.http.services.mapproxy-server.loadbalancer.server.port=8080"
       - "traefik.docker.network=proxy"
 
