@@ -32,6 +32,13 @@ services:
       - map-data:/mapproxy/data
       - map-metadata:/mapproxy/metadata
       - tiles-cache:/mapproxy/mbtiles/:rw
+    restart: always 
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.mapproxy-server.rule=Host(`${SWI_MAPPROXY_HOST?Variable not set}`)"
@@ -56,16 +63,12 @@ services:
 
       # Sticky Session
       - "traefik.http.services.mapproxy-server.loadbalancer.sticky=true"
-
     healthcheck:
       test: ["CMD-SHELL", "/mapproxy/health-check.sh"]
       interval: 60s
       timeout: 5s
       retries: 3
       start_period: 60s
-    deploy:
-      replicas: 3
-    restart: always
     environment:
       - MAPPROXY_REDIS_HOST=redis
       - MAPPROXY_REDIS_PORT=6379
