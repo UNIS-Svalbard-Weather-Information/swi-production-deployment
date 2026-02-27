@@ -23,9 +23,13 @@
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend",
       "version": "3.0.4"
     },
+    "swi-titiller": {
+      "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-titiller",
+      "version": "0.0.1"
+    },
     "swi-metobs-caching": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-caching",
-      "version": "latest"
+      "version": "0.0.3"
     },
     "swi-aromearctic-caching": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-aromearctic-caching",
