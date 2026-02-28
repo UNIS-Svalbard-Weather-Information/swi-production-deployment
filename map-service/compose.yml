@@ -21,7 +21,7 @@ services:
       timeout: 5s
       retries: 3
     environment:
-      REDIS_PASSWORD: ${MAPSERVICES_REDIS_PWD}
+      REDIS_PASSWORD: ${SWI_MAPSERVICES_REDIS_PWD}
     networks:
       - internal
 
@@ -73,7 +73,7 @@ services:
       - MAPPROXY_REDIS_HOST=redis
       - MAPPROXY_REDIS_PORT=6379
       - MAPPROXY_REDIS_USERNAME=default
-      - MAPPROXY_REDIS_PASSWORD=${MAPSERVICES_REDIS_PWD}
+      - MAPPROXY_REDIS_PASSWORD=${SWI_MAPSERVICES_REDIS_PWD}
     depends_on:
       - redis
     networks:
