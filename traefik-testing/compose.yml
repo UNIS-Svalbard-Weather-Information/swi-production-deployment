@@ -17,7 +17,7 @@ services:
       - "443:443"
 
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - //var/run/docker.sock:/var/run/docker.sock
       - ./certs:/certs:ro
       - ./dynamic:/dynamic:ro
 
@@ -37,8 +37,7 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.network=proxy"
-      - "--providers.docker.endpoint=tcp://host.docker.internal:2375"
-
+      
       # API & Dashboard 
       - "--api.dashboard=true"
       - "--api.insecure=false"
