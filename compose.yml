@@ -133,6 +133,16 @@ services:
   # Met observations/forecast API and COG tile server, plus their cron caching jobs.
 
   met-public-api:
+    # Healthcheck below intentionally targets /health (liveness), not /ready
+    # (readiness): as of image 3.0.4, /ready always reports "not_ready" because the
+    # app's data-path constants (data/000_stations_status/..., data/000_long_timeseries)
+    # don't match what swi-metobs-caching actually writes to these mounted volumes
+    # (data/realtime/000_stations_status/..., data/historical/000_long_timeseries) -
+    # confirmed by running both locally. That path realignment is already done in
+    # swi-metobs-backend's open PR #13 (branch feat--ForecastSinglePoint) but not yet
+    # merged. Once it merges and a new image is released, switch this healthcheck to
+    # /ready so Swarm's start-first rolling update actually gates on real readiness
+    # instead of bare liveness.
     image: ghcr.io/unis-svalbard-weather-information/swi-metobs-backend:3.0.4
     volumes:
       - met-forecast-data:/swi/data/forecast:ro
