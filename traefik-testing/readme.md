@@ -44,11 +44,13 @@ cp .env.example .env   # values already default to *.localhost hosts, fine as-is
 docker compose -f compose.yml up -d
 ```
 
-Note: locally this runs as plain Docker Compose, so the `deploy:` keys (replicas, rolling
-`start-first` updates) are ignored — that's fine for functional/CORS testing. To also
-exercise the zero-downtime rolling-update behavior itself, initialize a local single-node
-Swarm instead (`docker swarm init`) and deploy with `docker stack deploy -c compose.yml
-swi`.
+Note: modern Docker Compose (verified with 29.3.1) honors `deploy.replicas` even outside
+Swarm mode — bringing this up with plain `docker compose up` really does start 3 copies of
+mapproxy-server/met-public-api/met-tilling-api. It does *not* honor `update_config` (the
+`start-first` rolling-update behavior), since that's a Swarm scheduler feature with no plain-
+Compose equivalent. To exercise the actual rolling-update behavior, initialize a local
+single-node Swarm instead (`docker swarm init`) and deploy with `docker stack deploy -c
+compose.yml swi`.
 
 Give services a minute to pass their `start_period` healthchecks, then check status:
 
