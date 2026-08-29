@@ -17,15 +17,35 @@ jobs:
         with:
           ref: main
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
+      - name: Update release date if needed
+        id: update_date
+        run: |
+          TODAY=$(date +'%Y-%m-%d')
+          CURRENT_DATE=$(jq -r '.release_date' info/version.json)
+
+          if [ "$CURRENT_DATE" != "$TODAY" ]; then
+            jq --arg d "$TODAY" '.release_date = $d' info/version.json > info/version.json.tmp && \
+               mv info/version.json.tmp info/version.json
+            echo "date_updated=true" >> $GITHUB_OUTPUT
+          else
+            echo "date_updated=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push date update (if needed)
+        if: steps.update_date.outputs.date_updated == 'true'
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add info/version.json
+          git commit -m "Update release date to $(date +'%Y-%m-%d')"
+          git push
 
       - name: Get Version
         id: get_version
         run: |
-          # Read current version
+          # info/version.json's .release is already the final version for this cycle -
+          # it was kept continuously up to date by update-info.py while the release
+          # branch was open (see update_services_info.yml), no re-bump needed here.
           VERSION=$(jq -r '.release' info/version.json)
           VERSION_NAME=$(jq -r '.release_name' info/version.json)
 
@@ -39,86 +59,47 @@ jobs:
         with:
           tag_name: ${{ steps.get_version.outputs.version }}
           release_name: ${{ steps.get_version.outputs.version }}
-          body: "Release ${{ steps.get_version.outputs.version_name }} version ${{ steps.bump_version.outputs.version }}"
+          body: "Release ${{ steps.get_version.outputs.version_name }} version ${{ steps.get_version.outputs.version }}"
 
-  new-version:
+  cut-next-release-branch:
+    # Starts the next release/X.Y.Z cycle immediately after this one reaches
+    # production - replaces the old per-cycle "new-version" job, which used to open a
+    # PR back to main directly. That's no longer how this works: the new branch just
+    # sits open collecting Renovate's image bumps (see renovate.json) until someone
+    # promotes it via a PR into pre-prod.
     needs: release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Checkout code
+      - name: Checkout main
         uses: actions/checkout@v4
         with:
           ref: main
+          fetch-depth: 0
 
-      - name: Bump version for next cycle
-        id: bump_version
+      - name: Compute next release branch version
+        id: next
         run: |
-          # Read current version
           VERSION=$(jq -r '.release' info/version.json)
-          VERSION_NAME=$(jq -r '.release_name' info/version.json)
+          IFS='.' read -r major minor patch <<< "$VERSION"
+          NEW_VERSION="${major}.${minor}.$((patch + 1))"
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
 
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
-
-          # Split version into base and suffix (e.g., 2.0.0-alpha1)
-          if [[ $VERSION =~ ^([0-9]+\.[0-9]+\.[0-9]+)-([a-z]+)([0-9]+)$ ]]; then
-            BASE=${BASH_REMATCH[1]}
-            SUFFIX=${BASH_REMATCH[2]}
-            NUM=${BASH_REMATCH[3]}
-            NEW_NUM=$((NUM + 1))
-            NEW_VERSION="${BASE}-${SUFFIX}${NEW_NUM}"
-          else
-            # If no suffix, increment Fix number
-            IFS='.' read -r -a parts <<< "$VERSION"
-            NEW_VERSION="${parts[0]}.${parts[1]}.$((parts[2] + 1))"
-          fi
-
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-
-      - name: Update version file
+      - name: Set placeholder next version
         run: |
-          # Update version.json for the next cycle
-          echo "Before jq:"
-          cat info/version.json
-          jq --arg v "${{ steps.bump_version.outputs.new_version }}" '.release = $v' info/version.json > info/version.json.tmp
-          echo "After jq (tmp file):"
-          cat info/version.json.tmp
+          jq --arg v "${{ steps.next.outputs.new_version }}" '.release = $v' info/version.json > info/version.json.tmp
           mv info/version.json.tmp info/version.json
-          echo "After mv:"
-          cat info/version.json
 
-      - name: Commit changes
+      - name: Write the new cycle's baseline
+        run: |
+          pip install --quiet pyyaml
+          python update-info.py --write-baseline
+
+      - name: Commit and push the new release branch
         uses: EndBug/add-and-commit@v9
         with:
-          add: "info/version.json"
+          add: "info/version.json info/.release-baseline.json"
           default_author: github_actions
-          new_branch: "release/${{ steps.bump_version.outputs.new_version }}"
-          message: "Update version to ${{ steps.bump_version.outputs.new_version }}"
-
-      - name: Create Pull Request via API
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SOURCE_BRANCH: "release/${{ steps.bump_version.outputs.new_version }}"
-          TARGET_BRANCH: main
-          TITLE: "Release ${{ steps.bump_version.outputs.new_version }} (${{ steps.bump_version.outputs.version_name }})"
-        run: |
-          response=$(curl -X POST \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            -w "%{http_code}" \
-            -o response_body.json \
-            https://api.github.com/repos/${{ github.repository }}/pulls \
-            -d '{
-              "title": "'"$TITLE"'",
-              "body": "> ⚠️ **Warning**: Before merging, ensure the bibliography is updated.\n\n> ℹ️ **Info**: This branch (`'"$SOURCE_BRANCH"'`) is deployed in the pre-production environment.\n\nThis PR was automatically created for the release `'"$SOURCE_BRANCH"'`.",
-              "head": "'"$SOURCE_BRANCH"'",
-              "base": "'"$TARGET_BRANCH"'",
-              "draft": false
-            }')
-
-          # Check if the status code is 201 (success for PR creation)
-          if [ "$response" -ne 201 ]; then
-            echo "Failed to create PR. HTTP status: $response"
-            cat response_body.json
-            exit 1
-          fi
+          new_branch: "release/${{ steps.next.outputs.new_version }}"
+          message: "Start release cycle ${{ steps.next.outputs.new_version }}"

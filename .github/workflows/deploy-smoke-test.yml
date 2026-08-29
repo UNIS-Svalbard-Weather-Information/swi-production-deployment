@@ -1,0 +1,116 @@
+name: Deployment smoke test
+
+# Gates the pre-prod -> main promotion PR: brings the real stack up behind the same
+# Traefik config used for local testing (see traefik-testing/readme.md), checks every
+# long-running service's healthcheck, and checks CORS headers on each routed endpoint.
+# This is a required status check on main's branch protection rule - a broken stack
+# cannot be merged to production. Set that requirement in repo settings; it can't be
+# configured from this workflow file.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - compose.yml
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate compose file
+        run: docker compose -f compose.yml config >/dev/null
+
+      - name: Write placeholder .env
+        run: |
+          cat > .env <<'EOF'
+          CORS_ALLOWED_ORIGINS=*
+          SWI_REDIS_PWD=smoke-test-password
+          SWI_MAPPROXY_HOST=mapserver.localhost
+          SWI_APIS_HOST=api.localhost
+          SWI_METOBS_API_ROUTE=/public/
+          SWI_METOBS_INTERNAL_PORT=8085
+          SWI_TITILER_API_ROUTE=/tiles/
+          SWI_ELEVATION_API_ROUTE=/oeapi/
+          SWI_SEAICE_MONITORING_ENDPOINT=http://127.0.0.1
+          SWI_AVALANCHE_MONITORING_ENDPOINT=http://127.0.0.1
+          SWI_METOBS_HOLFUY_API_KEY=smoke-test-key
+          SWI_METOBS_FROST_API_KEY=smoke-test-key
+          EOF
+
+      - name: Resolve *.localhost hostnames explicitly
+        run: |
+          echo "127.0.0.1 mapserver.localhost api.localhost dashboard.docker.localhost" | sudo tee -a /etc/hosts
+
+      - name: Create external network (Dokploy provides this in production)
+        run: docker network create dokploy-network
+
+      - name: Generate local TLS cert for Traefik
+        run: |
+          mkdir -p traefik-testing/certs
+          openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+            -keyout traefik-testing/certs/local.key -out traefik-testing/certs/local.crt \
+            -subj "/CN=*.localhost"
+
+      - name: Start Traefik
+        run: docker compose -f traefik-testing/compose.yml up -d
+
+      - name: Bring the stack up
+        # Cron containers excluded: they need real upstream API keys to fetch live data
+        # and aren't part of the "does the stack come up healthy and route correctly"
+        # question this gate asks.
+        run: docker compose -f compose.yml up -d redis mapproxy-server met-public-api met-tilling-api elevation_api
+
+      - name: Wait for services to report healthy
+        run: |
+          timeout=300
+          elapsed=0
+          services="mapproxy-server met-public-api met-tilling-api elevation_api"
+          while true; do
+            unhealthy=""
+            for s in $services; do
+              cid=$(docker compose -f compose.yml ps -q "$s")
+              status=$(docker inspect --format='{{.State.Health.Status}}' "$cid" 2>/dev/null || echo "unknown")
+              if [ "$status" != "healthy" ]; then
+                unhealthy="$unhealthy $s($status)"
+              fi
+            done
+            if [ -z "$unhealthy" ]; then
+              echo "All services healthy."
+              break
+            fi
+            if [ "$elapsed" -ge "$timeout" ]; then
+              echo "Timed out waiting for:$unhealthy"
+              docker compose -f compose.yml logs
+              exit 1
+            fi
+            echo "Waiting on:$unhealthy"
+            sleep 10
+            elapsed=$((elapsed + 10))
+          done
+
+      - name: CORS check
+        run: |
+          set -e
+          check() {
+            name="$1"; url="$2"
+            header=$(curl -k -s -D - -o /dev/null -H "Origin: https://example.com" "$url" | tr -d '\r' | grep -i '^access-control-allow-origin:' || true)
+            if [ -z "$header" ]; then
+              echo "FAIL: $name ($url) - no access-control-allow-origin header"
+              exit 1
+            fi
+            echo "OK: $name -> $header"
+          }
+          check mapproxy "https://mapserver.localhost/"
+          check titiller "https://api.localhost/tiles/"
+          check elevationapi "https://api.localhost/oeapi/"
+          check metobs-backend "https://api.localhost/public/"
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose -f compose.yml down -v
+          docker compose -f traefik-testing/compose.yml down -v
+          docker network rm dokploy-network || true
