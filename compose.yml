@@ -1,0 +1,339 @@
+name: SW-SWI-SRM-Services
+
+# Single combined Dokploy stack (Docker Swarm mode, single node) for all SWI production
+# services. Dokploy currently only accepts one compose file per project, so this file is
+# kept readable through the section banners below rather than split across files.
+#
+# CORS is enforced at the Traefik layer (accesscontrolalloworiginlist middleware) for
+# mapproxy-server, met-tilling-api and elevation_api, all of which have no CORS handling
+# of their own. met-public-api is the one exception: it already does CORS at the
+# application level (FastAPI CORSMiddleware, driven by its own CORS_ALLOWED_ORIGINS env
+# var) so it intentionally does NOT also get a Traefik CORS middleware here — stacking
+# both would produce duplicate/conflicting Access-Control-Allow-Origin headers.
+
+services:
+
+  # ── shared ──────────────────────────────────────────────────────────────
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=false"
+    command: >
+      sh -c '
+      mkdir -p /usr/local/etc/redis &&
+      echo "user default on >$$REDIS_PASSWORD ~* +@all" > /usr/local/etc/redis/users.acl &&
+      exec redis-server --save 60 1 --loglevel warning --aclfile /usr/local/etc/redis/users.acl
+      '
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    environment:
+      REDIS_PASSWORD: ${SWI_REDIS_PWD}
+    networks:
+      - internal
+
+  # ── map-service ─────────────────────────────────────────────────────────
+  # MapProxy WMTS server, plus the sea-ice and avalanche cron caching jobs it depends on.
+
+  mapproxy-server:
+    image: ghcr.io/unis-svalbard-weather-information/swi-mapproxy:trixie-p3.13-mp6.0.1-0.0.12
+    volumes:
+      - map-data:/mapproxy/data
+      - map-metadata:/mapproxy/metadata
+      - tiles-cache:/mapproxy/mbtiles/:rw
+    restart: unless-stopped
+    deploy:
+      replicas: 3
+      update_config:
+        order: start-first
+        failure_action: rollback
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mapproxy-server.rule=Host(`${SWI_MAPPROXY_HOST?Variable not set}`)"
+      - "traefik.http.routers.mapproxy-server.entrypoints=websecure"
+      - "traefik.http.routers.mapproxy-server.tls=true"
+      - "traefik.http.services.mapproxy-server.loadbalancer.server.port=8080"
+      - "traefik.docker.network=dokploy-network"
+
+      # CORS middleware
+      - "traefik.http.middlewares.mapproxycors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
+      - "traefik.http.middlewares.mapproxycors.headers.accesscontrolallowheaders=*"
+      - "traefik.http.middlewares.mapproxycors.headers.accesscontrolalloworiginlist=${CORS_ALLOWED_ORIGINS?Variable not set}"
+      - "traefik.http.middlewares.mapproxycors.headers.accesscontrolallowcredentials=true"
+
+      # Additional headers middleware
+      - "traefik.http.middlewares.mapproxyheaders.headers.customrequestheaders.X-Forwarded-Proto=http"
+      - "traefik.http.middlewares.mapproxyheaders.headers.customrequestheaders.X-Forwarded-Host=${SWI_MAPPROXY_HOST?Variable not set}"
+      - "traefik.http.middlewares.mapproxyheaders.headers.customresponseheaders.Cache-Control=public, max-age=60, s-maxage=60"
+
+      # Apply middlewares
+      - "traefik.http.routers.mapproxy-server.middlewares=mapproxycors,mapproxyheaders"
+
+      # Sticky Session
+      - "traefik.http.services.mapproxy-server.loadbalancer.sticky=true"
+    healthcheck:
+      test: ["CMD-SHELL", "/mapproxy/health-check.sh"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    environment:
+      - MAPPROXY_REDIS_HOST=redis
+      - MAPPROXY_REDIS_PORT=6379
+      - MAPPROXY_REDIS_USERNAME=default
+      - MAPPROXY_REDIS_PASSWORD=${SWI_REDIS_PWD}
+    depends_on:
+      - redis
+    networks:
+      - dokploy-network
+      - internal
+
+  CRON_seaice_cache:
+    image: ghcr.io/unis-svalbard-weather-information/swi-mapcache-seaice:0.0.10
+    labels:
+      - "traefik.enable=false"
+    volumes:
+      - map-data:/swi/export
+      - map-metadata:/swi/metadata
+    environment:
+      - DOCKER_CRON=1
+      - SWI_SEAICE_MONITORING_ENDPOINT=${SWI_SEAICE_MONITORING_ENDPOINT}
+    depends_on:
+      - mapproxy-server
+    networks:
+      - internal
+
+  CRON_avalanche_cache:
+    image: ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:0.0.3
+    labels:
+      - "traefik.enable=false"
+    volumes:
+      - map-data:/swi/data
+      - map-metadata:/swi/metadata
+      - aval-raster-cache:/swi/static
+    environment:
+      - DOCKER_CRON=1
+      - SWI_AVALANCHE_MONITORING_ENDPOINT=${SWI_AVALANCHE_MONITORING_ENDPOINT}
+    depends_on:
+      - mapproxy-server
+    networks:
+      - internal
+
+  # ── met-service ─────────────────────────────────────────────────────────
+  # Met observations/forecast API and COG tile server, plus their cron caching jobs.
+
+  met-public-api:
+    image: ghcr.io/unis-svalbard-weather-information/swi-metobs-backend:3.0.4
+    volumes:
+      - met-forecast-data:/swi/data/forecast:ro
+      - met-historical-data:/swi/data/historical:ro
+      - met-realtime-data:/swi/data/realtime:ro
+    restart: always
+    deploy:
+      replicas: 3
+      update_config:
+        order: start-first
+        failure_action: rollback
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.metobs.rule=Host(`${SWI_APIS_HOST?Variable not set}`)  && PathPrefix(`${SWI_METOBS_API_ROUTE?Variable not set}`)"
+      - "traefik.http.routers.metobs.entrypoints=websecure"
+      - "traefik.http.routers.metobs.tls=true"
+      - "traefik.http.services.metobs.loadbalancer.server.port=${SWI_METOBS_INTERNAL_PORT:-8085}"
+      - "traefik.docker.network=dokploy-network"
+
+      # Sticky Session
+      - "traefik.http.services.metobs.loadbalancer.sticky=true"
+
+      # Middleware
+      - "traefik.http.middlewares.metobs-stripprefix.stripprefix.prefixes=${SWI_METOBS_API_ROUTE?Variable not set}"
+
+      - "traefik.http.routers.metobs.middlewares=metobs-stripprefix"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sSf 'http://127.0.0.1:${SWI_METOBS_INTERNAL_PORT:-8085}/health' >/dev/null || exit 1"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 600s
+    environment:
+      - PORT=${SWI_METOBS_INTERNAL_PORT:-8085}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+      - API_ROOT_PATH=${SWI_METOBS_API_ROUTE?Variable not set}
+      # Redis caching (from swi-metobs-backend#13, "AROME-Arctic single-point forecast +
+      # response caching" — still open as of this write. These vars are inert until that
+      # PR merges; harmless to ship ahead of time.
+      - SWI_METSERVICES_REDIS_HOST=${SWI_METSERVICES_REDIS_HOST:-redis}
+      - SWI_METSERVICES_REDIS_PORT=${SWI_METSERVICES_REDIS_PORT:-6379}
+      - SWI_METSERVICES_REDIS_PWD=${SWI_REDIS_PWD}
+    depends_on:
+      - redis
+    networks:
+      - dokploy-network
+      - internal
+
+  met-tilling-api:
+    image: ghcr.io/unis-svalbard-weather-information/swi-titiller:0.0.1
+    volumes:
+      - met-forecast-data:/swi/data/forecast:ro
+    restart: always
+    deploy:
+      replicas: 3
+      update_config:
+        order: start-first
+        failure_action: rollback
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.titiller.rule=Host(`${SWI_APIS_HOST?Variable not set}`)  && PathPrefix(`${SWI_TITILER_API_ROUTE?Variable not set}`)"
+      - "traefik.http.routers.titiller.entrypoints=websecure"
+      - "traefik.http.routers.titiller.tls=true"
+      - "traefik.http.services.titiller.loadbalancer.server.port=8085"
+      - "traefik.docker.network=dokploy-network"
+
+      # CORS middleware (titiller has no CORS handling of its own)
+      - "traefik.http.middlewares.titillercors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
+      - "traefik.http.middlewares.titillercors.headers.accesscontrolallowheaders=*"
+      - "traefik.http.middlewares.titillercors.headers.accesscontrolalloworiginlist=${CORS_ALLOWED_ORIGINS?Variable not set}"
+      - "traefik.http.middlewares.titillercors.headers.accesscontrolallowcredentials=true"
+
+      # Sticky Session
+      - "traefik.http.services.titiller.loadbalancer.sticky=true"
+
+      # Middleware
+      - "traefik.http.middlewares.titiller-stripprefix.stripprefix.prefixes=${SWI_TITILER_API_ROUTE?Variable not set}"
+
+      - "traefik.http.routers.titiller.middlewares=titiller-stripprefix,titillercors"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sSf 'http://localhost:8085/health' >/dev/null || exit 1"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 600s
+    environment:
+      - API_ROOT_PATH=${SWI_TITILER_API_ROUTE?Variable not set}
+    networks:
+      - dokploy-network
+      - internal
+
+  # Cache met observations from met.no. Prod: cron every 10 minutes via a Dokploy
+  # Schedule (`docker exec <container> run-cron`) — DOCKER_CRON keeps this container
+  # alive between runs instead of exiting after the first pass.
+  # TODO: add a monitoring/heartbeat ping once the cache run completes, matching the
+  # SWI_SEAICE_MONITORING_ENDPOINT / SWI_AVALANCHE_MONITORING_ENDPOINT pattern above.
+  CRON_metobs_cache:
+    image: ghcr.io/unis-svalbard-weather-information/swi-metobs-caching:0.0.3
+    labels:
+      - "traefik.enable=false"
+    volumes:
+      - met-historical-data:/swi/data/historical:rw
+      - met-realtime-data:/swi/data/realtime:rw
+    environment:
+      - DOCKER_CRON=1
+      - SWI_HOLFUY_API_KEY=${SWI_METOBS_HOLFUY_API_KEY?Variable not set}
+      - SWI_FROST_API_KEY=${SWI_METOBS_FROST_API_KEY?Variable not set}
+    networks:
+      - internal
+
+  # Cache AROME-Arctic weather forecasts. Prod: cron at 01:30, 07:30, 13:30, 19:30 UTC
+  # via a Dokploy Schedule, same DOCKER_CRON stay-alive pattern as above.
+  # TODO: add a monitoring/heartbeat ping once the cache run completes.
+  CRON_AAforecast_cache:
+    image: ghcr.io/unis-svalbard-weather-information/swi-aromearctic-caching:0.0.6
+    labels:
+      - "traefik.enable=false"
+    volumes:
+      - met-forecast-data:/swi/data/forecast:rw
+    environment:
+      - DOCKER_CRON=1
+    networks:
+      - internal
+
+  # ── elevation-service ───────────────────────────────────────────────────
+
+  elevation_api:
+    image: ghcr.io/unis-svalbard-weather-information/swi-elevationapi:0.0.1
+    volumes:
+      - elevation_data:/code/data
+    restart: always
+    deploy:
+      replicas: 1
+      update_config:
+        order: start-first
+        failure_action: rollback
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.oeapi.rule=Host(`${SWI_APIS_HOST?Variable not set}`)  && PathPrefix(`${SWI_ELEVATION_API_ROUTE?Variable not set}`)"
+      - "traefik.http.routers.oeapi.entrypoints=websecure"
+      - "traefik.http.routers.oeapi.tls=true"
+      - "traefik.http.services.oeapi.loadbalancer.server.port=8080"
+      - "traefik.docker.network=dokploy-network"
+
+      # CORS middleware
+      - "traefik.http.middlewares.oeapicors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
+      - "traefik.http.middlewares.oeapicors.headers.accesscontrolallowheaders=*"
+      - "traefik.http.middlewares.oeapicors.headers.accesscontrolalloworiginlist=${CORS_ALLOWED_ORIGINS?Variable not set}"
+      - "traefik.http.middlewares.oeapicors.headers.accesscontrolallowcredentials=true"
+
+      # Middleware: rewrite the public route prefix to the app's own /api/ prefix
+      - "traefik.http.middlewares.rewrite-oeapi.replacepathregex.regex=^${SWI_ELEVATION_API_ROUTE?Variable not set}(.*)"
+      - "traefik.http.middlewares.rewrite-oeapi.replacepathregex.replacement=/api/$$1"
+
+      # Apply middlewares
+      - "traefik.http.routers.oeapi.middlewares=rewrite-oeapi,oeapicors"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sSf 'http://127.0.0.1:8080/api/v1/lookup?locations=78.22,15.62' >/dev/null || exit 1"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 600s
+    networks:
+      - dokploy-network
+      - internal
+
+volumes:
+  tiles-cache:
+
+  map-data:
+
+  map-metadata:
+
+  aval-raster-cache:
+    driver: local
+
+  met-forecast-data:
+
+  met-historical-data:
+
+  met-realtime-data:
+
+  elevation_data:
+
+  redis_data:
+    driver: local
+
+networks:
+  dokploy-network:
+    external: true
+  internal:
+    driver: bridge

@@ -9,8 +9,8 @@ services:
       - no-new-privileges:true
 
     networks:
-     # Connect to the 'traefik_proxy' overlay network for inter-container communication across nodes
-      - proxy
+     # Connect to the external 'dokploy-network' for inter-container communication
+      - dokploy-network
 
     ports:
       - "80:80"
@@ -36,7 +36,7 @@ services:
       # Providers 
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=proxy"
+      - "--providers.docker.network=dokploy-network"
       
       # API & Dashboard 
       - "--api.dashboard=true"
@@ -63,5 +63,5 @@ services:
       - "traefik.http.routers.dashboard.middlewares=dashboard-auth@docker"
 
 networks:
-  proxy:
+  dokploy-network:
     external: true

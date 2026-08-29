@@ -15,9 +15,9 @@
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-avalanche-caching",
       "version": "0.0.3"
     },
-    "swi-elevationapi": {
-      "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-elevationapi",
-      "version": "0.0.1"
+    "swi-metobs-backend": {
+      "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend",
+      "version": "3.0.4"
     },
     "swi-titiller": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-titiller",
@@ -30,6 +30,10 @@
     "swi-aromearctic-caching": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-aromearctic-caching",
       "version": "0.0.6"
+    },
+    "swi-elevationapi": {
+      "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-elevationapi",
+      "version": "0.0.1"
     }
   }
 }
