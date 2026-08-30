@@ -18,6 +18,13 @@ jobs:
         with:
           ref: main
 
+      - name: Capture the shipped commit SHA
+        # Captured before the (possibly-failing) date-bump commit below, so the
+        # release/X.Y.Z marker always points at a commit that's actually pushed to
+        # main - not a local-only commit that failed to push under branch protection.
+        id: shipped
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Update release date if needed
         id: update_date
         run: |
@@ -51,7 +58,7 @@ jobs:
         id: get_version
         run: |
           # info/version.json's .release is already the final version for this cycle -
-          # it was kept continuously up to date by update-info.py while the release
+          # it was kept continuously up to date by update-info.py while the staging
           # branch was open (see update_services_info.yml), no re-bump needed here.
           VERSION=$(jq -r '.release' info/version.json)
           VERSION_NAME=$(jq -r '.release_name' info/version.json)
@@ -68,12 +75,26 @@ jobs:
           release_name: ${{ steps.get_version.outputs.version }}
           body: "Release ${{ steps.get_version.outputs.version_name }} version ${{ steps.get_version.outputs.version }}"
 
-  cut-next-release-branch:
-    # Starts the next release/X.Y.Z cycle immediately after this one reaches
-    # production - replaces the old per-cycle "new-version" job, which used to open a
-    # PR back to main directly. That's no longer how this works: the new branch just
-    # sits open collecting Renovate's image bumps (see renovate.json) until someone
-    # promotes it via a PR into pre-prod.
+      - name: Create the release/X.Y.Z historical marker branch
+        # A pure snapshot, created once and never touched again - this is what
+        # release/X.Y.Z means now (staging/X.Y.Z is the active, mutable branch - see
+        # cut-next-staging-branch below). No lock/protection step needed: since
+        # nothing ever pushes to it after creation, there's nothing to protect
+        # against. The repo's release/** ruleset (create allowed, delete restricted)
+        # already fits this purpose.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method POST "repos/${{ github.repository }}/git/refs" \
+            -f ref="refs/heads/release/${{ steps.get_version.outputs.version }}" \
+            -f sha="${{ steps.shipped.outputs.sha }}"
+
+  cut-next-staging-branch:
+    # Starts the next staging/X.Y.Z cycle immediately after this one reaches
+    # production: deletes the just-shipped staging branch (its content is fully
+    # captured in main + the release/X.Y.Z marker just created above) and cuts a
+    # fresh one, which just sits open collecting Renovate's image bumps (see
+    # renovate.json) until someone promotes it via a PR into pre-prod.
     needs: release
     runs-on: ubuntu-latest
     permissions:
@@ -85,7 +106,15 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Compute next release branch version
+      - name: Delete the just-shipped staging branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHIPPED_VERSION=$(jq -r '.release' info/version.json)
+          gh api --method DELETE "repos/${{ github.repository }}/git/refs/heads/staging/${SHIPPED_VERSION}" || \
+            echo "No staging/${SHIPPED_VERSION} branch to delete (already gone, or this was a manual/out-of-band run) - continuing."
+
+      - name: Compute next staging branch version
         id: next
         run: |
           VERSION=$(jq -r '.release' info/version.json)
@@ -103,10 +132,10 @@ jobs:
           pip install --quiet pyyaml
           python update-info.py --write-baseline
 
-      - name: Commit and push the new release branch
+      - name: Commit and push the new staging branch
         uses: EndBug/add-and-commit@v9
         with:
           add: "info/version.json info/.release-baseline.json"
           default_author: github_actions
-          new_branch: "release/${{ steps.next.outputs.new_version }}"
+          new_branch: "staging/${{ steps.next.outputs.new_version }}"
           message: "Start release cycle ${{ steps.next.outputs.new_version }}"
