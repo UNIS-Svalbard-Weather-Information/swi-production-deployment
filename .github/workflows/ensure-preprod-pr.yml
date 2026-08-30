@@ -1,0 +1,76 @@
+name: Ensure pre-prod promotion PR exists
+
+# Reconciliation, not just reaction: opens a release/X.Y.Z -> pre-prod PR whenever a
+# release branch has commits pre-prod doesn't have yet, and keeps checking on a
+# schedule so a missed/failed trigger doesn't leave it silently missing (this is
+# exactly the gap we hit: cut-next-release-branch made release/2.0.1, but nothing
+# ever opened the PR to promote it). Doesn't merge anything - promoting to pre-prod
+# stays a deliberate human decision, this just makes sure the PR is there to make it.
+
+on:
+  push:
+    branches:
+      - 'release/**'
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  open-prs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check pre-prod exists
+        id: preprod
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh api "repos/${{ github.repository }}/branches/pre-prod" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "pre-prod doesn't exist yet - nothing to do (this is a one-time bootstrap step, not something this workflow creates)."
+          fi
+
+      - name: List release/* branches
+        if: steps.preprod.outputs.exists == 'true'
+        id: branches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/${{ github.repository }}/branches?per_page=100" \
+            --jq '[.[] | select(.name | startswith("release/")) | .name] | join("\n")' \
+            > release_branches.txt
+          cat release_branches.txt
+
+      - name: Open or update promotion PRs for each release branch
+        if: steps.preprod.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          while IFS= read -r branch; do
+            [ -z "$branch" ] && continue
+
+            existing=$(gh pr list --head "$branch" --base pre-prod --state open --json number --jq '.[0].number')
+            if [ -n "$existing" ]; then
+              echo "$branch: PR #$existing already open into pre-prod"
+              continue
+            fi
+
+            if [ -z "$(git rev-list "origin/pre-prod..origin/$branch" 2>/dev/null)" ]; then
+              echo "$branch: no commits ahead of pre-prod - nothing to promote"
+              continue
+            fi
+
+            echo "$branch: opening promotion PR"
+            gh pr create --head "$branch" --base pre-prod \
+              --title "Promote $branch to pre-prod" \
+              --body "Opened automatically - \`$branch\` has commits pre-prod doesn't have yet. Merge when ready to deploy to staging."
+          done < release_branches.txt
