@@ -174,15 +174,27 @@ jobs:
           NEW_VERSION="${major}.${minor}.$((patch + 1))"
           echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Write the new cycle's baseline
+        # Must run BEFORE "Set placeholder next version" below: this snapshots
+        # info/version.json.release as the baseline's anchor, and
+        # compute_release_bump() in update-info.py always bumps from that anchor
+        # (baseline["release"]), not from whatever the current placeholder says.
+        # Confirmed for real: writing the baseline after the placeholder overwrite
+        # baked "2.0.2" (the placeholder, itself already a +1-patch guess) into the
+        # baseline, so a single genuine patch-level component change later computed
+        # 2.0.2's own +1 patch = "2.0.3" - one bump too many for what was actually a
+        # single patch-level change. Snapshotting while version.json.release still
+        # holds the true last-shipped version (e.g. "2.0.1") fixes the anchor, so a
+        # single patch-level change correctly lands on "2.0.2" - the same value the
+        # placeholder already guessed - instead of overshooting past it.
+        run: |
+          pip install --quiet pyyaml
+          python update-info.py --write-baseline
+
       - name: Set placeholder next version
         run: |
           jq --arg v "${{ steps.next.outputs.new_version }}" '.release = $v' info/version.json > info/version.json.tmp
           mv info/version.json.tmp info/version.json
-
-      - name: Write the new cycle's baseline
-        run: |
-          pip install --quiet pyyaml
-          python update-info.py --write-baseline
 
       - name: Commit and push the new staging branch
         uses: EndBug/add-and-commit@v9
