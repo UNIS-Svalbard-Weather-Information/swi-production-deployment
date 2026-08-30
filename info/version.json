@@ -1,5 +1,5 @@
 {
-  "release": "2.0.2",
+  "release": "2.0.3",
   "release_name": "PleaseSuggestArticAnimalsNames",
   "release_date": "2026-08-30",
   "components": {
@@ -17,11 +17,11 @@
     },
     "swi-metobs-backend": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend",
-      "version": "3.0.4"
+      "version": "3.0.6"
     },
     "swi-titiller": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-titiller",
-      "version": "0.0.1"
+      "version": "0.0.3"
     },
     "swi-metobs-caching": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-caching",
