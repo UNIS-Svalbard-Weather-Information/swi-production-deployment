@@ -56,16 +56,28 @@ jobs:
           git push
 
       - name: Get Version
+        # info/version.json's .release is already the final version for this cycle -
+        # it was kept continuously up to date by update-info.py while the staging
+        # branch was open (see update_services_info.yml), no re-bump needed here.
+        # Composes in the alpha/beta qualifier if one was set via a /alpha or /beta PR
+        # comment (see set-prerelease-type.yml) - .release itself always stays pure
+        # X.Y.Z semver, so this is what turns it into the actual shipped tag.
         id: get_version
         run: |
-          # info/version.json's .release is already the final version for this cycle -
-          # it was kept continuously up to date by update-info.py while the staging
-          # branch was open (see update_services_info.yml), no re-bump needed here.
-          VERSION=$(jq -r '.release' info/version.json)
+          RELEASE=$(jq -r '.release' info/version.json)
+          QUALIFIER=$(jq -r '.prerelease_type // empty' info/version.json)
+          if [ -n "$QUALIFIER" ]; then
+            VERSION="${RELEASE}-${QUALIFIER}"
+            IS_PRERELEASE=true
+          else
+            VERSION="$RELEASE"
+            IS_PRERELEASE=false
+          fi
           VERSION_NAME=$(jq -r '.release_name' info/version.json)
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: actions/create-release@v1
@@ -75,6 +87,10 @@ jobs:
           tag_name: ${{ steps.get_version.outputs.version }}
           release_name: ${{ steps.get_version.outputs.version }}
           body: "Release ${{ steps.get_version.outputs.version_name }} version ${{ steps.get_version.outputs.version }}"
+          # Still marked as a GitHub pre-release when an alpha/beta qualifier is set,
+          # even though this is the "final" tag that ships from this cycle - it's
+          # semantically still not a stable release.
+          prerelease: ${{ steps.get_version.outputs.is_prerelease }}
 
       - name: Create the release/X.Y.Z historical marker branch
         # A pure snapshot, created once and never touched again - this is what
@@ -212,8 +228,12 @@ jobs:
           python update-info.py --write-baseline
 
       - name: Set placeholder next version
+        # Also resets prerelease_type to null: alpha/beta is a per-cycle choice (set
+        # via a /alpha or /beta PR comment - see set-prerelease-type.yml), not sticky
+        # across cycles, so a new staging branch always starts out as a plain stable
+        # release unless someone explicitly marks it again.
         run: |
-          jq --arg v "${{ steps.next.outputs.new_version }}" '.release = $v' info/version.json > info/version.json.tmp
+          jq --arg v "${{ steps.next.outputs.new_version }}" '.release = $v | .prerelease_type = null' info/version.json > info/version.json.tmp
           mv info/version.json.tmp info/version.json
 
       - name: Commit and push the new staging branch

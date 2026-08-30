@@ -2,6 +2,7 @@
   "release": "2.0.7",
   "release_name": "PleaseSuggestArticAnimalsNames",
   "release_date": "2026-08-30",
+  "prerelease_type": null,
   "components": {
     "swi-mapproxy": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-mapproxy",
