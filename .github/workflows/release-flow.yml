@@ -109,6 +109,14 @@ jobs:
         # that's set up, continue-on-error keeps this from failing the whole release
         # - pre-prod just stays behind until it's promoted through normally, same as
         # before this fix existed.
+        # continue-on-error: a rejected sync must never block the actual release
+        # (the GitHub Release + release/X.Y.Z marker above are the point of this
+        # job) - but a silently-swallowed failure here is exactly what let pre-prod
+        # drift for multiple cycles unnoticed before anyone caught it. The
+        # ::warning:: below surfaces as a visible annotation on the run (and on any
+        # PR that references it) regardless of continue-on-error, so a missing
+        # bypass permission shows up immediately instead of hiding until someone
+        # happens to notice an inflated promotion PR.
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -117,8 +125,13 @@ jobs:
             echo "pre-prod already matches main - nothing to sync."
             exit 0
           fi
-          gh api --method PATCH "repos/${{ github.repository }}/git/refs/heads/pre-prod" \
-            -f sha="${{ steps.shipped.outputs.sha }}"
+          if gh api --method PATCH "repos/${{ github.repository }}/git/refs/heads/pre-prod" \
+              -f sha="${{ steps.shipped.outputs.sha }}"; then
+            echo "pre-prod synced to ${{ steps.shipped.outputs.sha }}."
+          else
+            echo "::warning::pre-prod could not be synced to main (${{ steps.shipped.outputs.sha }}) - the direct push was rejected, most likely because pre-prod's branch protection doesn't yet exempt this workflow from its update restriction (repo Settings -> Rules -> the ruleset covering pre-prod -> add a bypass entry). pre-prod will stay behind main until that's added or someone syncs it manually (git push origin main:pre-prod) - the next staging promotion PR will show every commit since the last successful sync, not just genuinely new work."
+            exit 1
+          fi
 
   cut-next-staging-branch:
     # Starts the next staging/X.Y.Z cycle immediately after this one reaches
