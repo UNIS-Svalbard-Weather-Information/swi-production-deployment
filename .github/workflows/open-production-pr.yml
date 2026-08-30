@@ -31,7 +31,7 @@ jobs:
             echo "Promotes pre-prod (release \`${{ steps.version.outputs.version }}\`) to production."
             echo
             echo "Component versions changing:"
-            git diff main pre-prod -- info/version.json | grep '"version"' || echo "(no component version changes)"
+            git diff origin/main pre-prod -- info/version.json | grep '"version"' || echo "(no component version changes)"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -44,7 +44,7 @@ jobs:
           existing=$(gh pr list --head pre-prod --base main --state open --json number --jq '.[0].number')
           if [ -n "$existing" ]; then
             gh pr edit "$existing" --title "$TITLE" --body "$BODY"
-          elif [ -z "$(git rev-list main..pre-prod)" ]; then
+          elif [ -z "$(git rev-list origin/main..pre-prod)" ]; then
             # Nothing to promote yet (e.g. right after pre-prod was first cut from
             # main) - gh pr create fails outright on "No commits between main and
             # pre-prod" instead of a graceful no-op, so check first.
