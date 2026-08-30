@@ -52,8 +52,10 @@ services:
       # Enable self‑routing
       - "traefik.enable=true"
 
-      # Dashboard router
-      - "traefik.http.routers.dashboard.rule=Host(`dashboard.docker.localhost`)"
+      # Dashboard router - under plain *.localhost (not *.docker.localhost) so the
+      # single wildcard cert generated per readme.md covers this too, not just the
+      # routed services.
+      - "traefik.http.routers.dashboard.rule=Host(`dashboard.localhost`)"
       - "traefik.http.routers.dashboard.entrypoints=websecure"
       - "traefik.http.routers.dashboard.service=api@internal"
       - "traefik.http.routers.dashboard.tls=true"
