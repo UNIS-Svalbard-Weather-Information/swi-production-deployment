@@ -12,11 +12,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           ref: main
+          fetch-depth: 0
 
       - name: Capture the shipped commit SHA
         # Captured before the (possibly-failing) date-bump commit below, so the
@@ -88,6 +90,37 @@ jobs:
           gh api --method POST "repos/${{ github.repository }}/git/refs" \
             -f ref="refs/heads/release/${{ steps.get_version.outputs.version }}" \
             -f sha="${{ steps.shipped.outputs.sha }}"
+
+      - name: Sync pre-prod to match what just shipped
+        # pre-prod's own ref never moves when its PR merges into main (merging a PR
+        # advances the base branch, not the head branch), so pre-prod falls behind
+        # main by everything just shipped and stays behind until something
+        # explicitly catches it up. Confirmed for real: pre-prod ended up 13 commits
+        # behind main after a single cycle, which is why the following staging ->
+        # pre-prod promotion PR showed far more commits than the actual new work on
+        # staging. main's new tip already contains 100% of what was on pre-prod
+        # (that's what the merge which triggered this job just did), so this can
+        # only ever be a fast-forward - safe by construction. pre-prod requires a PR
+        # to update (repository rule), so this can't be a direct ref push - opens a
+        # PR from main and merges it immediately instead.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "$(git rev-list origin/pre-prod..HEAD)" ]; then
+            echo "pre-prod already matches main - nothing to sync."
+            exit 0
+          fi
+          EXISTING=$(gh pr list --head main --base pre-prod --state open --json url --jq '.[0].url')
+          if [ -n "$EXISTING" ]; then
+            PR_URL="$EXISTING"
+            echo "Sync PR already open: $PR_URL"
+          else
+            PR_URL=$(gh pr create --head main --base pre-prod \
+              --title "Sync pre-prod after ${{ steps.get_version.outputs.version }}" \
+              --body "Automatic housekeeping: fast-forwards pre-prod to match what just shipped to main, so the next staging promotion PR only shows genuinely new commits.")
+          fi
+          gh pr merge "$PR_URL" --merge --auto || \
+            echo "Could not merge/auto-merge $PR_URL - it likely needs a required review or check; merge it manually to keep pre-prod in sync."
 
   cut-next-staging-branch:
     # Starts the next staging/X.Y.Z cycle immediately after this one reaches
