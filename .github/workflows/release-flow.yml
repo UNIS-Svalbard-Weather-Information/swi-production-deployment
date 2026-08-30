@@ -99,37 +99,44 @@ jobs:
         # pre-prod promotion PR showed far more commits than the actual new work on
         # staging. main's new tip already contains 100% of what was on pre-prod
         # (that's what the merge which triggered this job just did), so this is
-        # always a pure fast-forward - safe by construction, no PR needed for it (a
-        # PR-based sync was tried first, but a PR for a pure housekeeping
-        # fast-forward is unnecessary ceremony). This is a direct ref update, same
-        # mechanism as the release/X.Y.Z marker creation above - it needs pre-prod's
-        # branch protection to let this workflow's token bypass the "restrict
-        # updates" rule (repo Settings -> Rules -> the ruleset covering pre-prod ->
-        # add a bypass entry, e.g. for repository admins or this workflow). Until
-        # that's set up, continue-on-error keeps this from failing the whole release
-        # - pre-prod just stays behind until it's promoted through normally, same as
-        # before this fix existed.
+        # always a pure fast-forward - safe by construction, no PR needed for it.
+        #
+        # This is a direct ref update, same mechanism as the release/X.Y.Z marker
+        # creation above. pre-prod requires an approving review from devops-team on
+        # every PR (repository ruleset), and the default GITHUB_TOKEN cannot be
+        # granted a ruleset bypass at all - that's a deliberate GitHub limitation,
+        # confirmed the hard way (an "Apps" bypass entry for the built-in token
+        # doesn't exist to add). PREPROD_SYNC_TOKEN is a fine-grained PAT belonging
+        # to a dedicated bot account that IS on the ruleset's bypass list, scoped to
+        # just this repo's contents: read/write - nothing else. Requires that bot
+        # account to be added as a bypass actor once (repo Settings -> Rules -> the
+        # ruleset covering pre-prod -> Bypass list).
+        #
         # continue-on-error: a rejected sync must never block the actual release
         # (the GitHub Release + release/X.Y.Z marker above are the point of this
-        # job) - but a silently-swallowed failure here is exactly what let pre-prod
-        # drift for multiple cycles unnoticed before anyone caught it. The
-        # ::warning:: below surfaces as a visible annotation on the run (and on any
-        # PR that references it) regardless of continue-on-error, so a missing
-        # bypass permission shows up immediately instead of hiding until someone
-        # happens to notice an inflated promotion PR.
+        # job). The ::warning:: below surfaces as a visible annotation on the run
+        # (and on any PR that references it) regardless of continue-on-error, so a
+        # missing/expired PAT shows up immediately instead of hiding until someone
+        # happens to notice an inflated promotion PR - that's exactly how the
+        # previous silent-failure version of this step went unnoticed for a full
+        # cycle before anyone caught it.
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PREPROD_SYNC_TOKEN }}
         run: |
           if [ -z "$(git rev-list origin/pre-prod..HEAD)" ]; then
             echo "pre-prod already matches main - nothing to sync."
             exit 0
           fi
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::PREPROD_SYNC_TOKEN secret is not set - cannot sync pre-prod. Add a fine-grained PAT from a bot account that's on pre-prod's ruleset bypass list as this repo secret. pre-prod will stay behind main until that's set up or someone syncs it manually (git push origin main:pre-prod)."
+            exit 1
+          fi
           if gh api --method PATCH "repos/${{ github.repository }}/git/refs/heads/pre-prod" \
               -f sha="${{ steps.shipped.outputs.sha }}"; then
             echo "pre-prod synced to ${{ steps.shipped.outputs.sha }}."
           else
-            echo "::warning::pre-prod could not be synced to main (${{ steps.shipped.outputs.sha }}) - the direct push was rejected, most likely because pre-prod's branch protection doesn't yet exempt this workflow from its update restriction (repo Settings -> Rules -> the ruleset covering pre-prod -> add a bypass entry). pre-prod will stay behind main until that's added or someone syncs it manually (git push origin main:pre-prod) - the next staging promotion PR will show every commit since the last successful sync, not just genuinely new work."
+            echo "::warning::pre-prod could not be synced to main (${{ steps.shipped.outputs.sha }}) - the push was rejected even with PREPROD_SYNC_TOKEN. Check that its bot account is still on pre-prod's ruleset bypass list and the PAT hasn't expired. pre-prod will stay behind main until this is fixed or someone syncs it manually (git push origin main:pre-prod) - the next staging promotion PR will show every commit since the last successful sync, not just genuinely new work."
             exit 1
           fi
 
