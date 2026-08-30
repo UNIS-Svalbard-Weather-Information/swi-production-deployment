@@ -35,7 +35,8 @@ value) since it's meant to double as a template for real deployment, and running
 containers for 3 services on a laptop is unnecessary weight for a dev loop.
 
 ```bash
-# 4. Bring the stack up (cron containers excluded - they need real upstream API keys)
+# 4. Bring the stack up (cron containers excluded - they need real upstream API keys,
+#    see API_KEYS.md if you want to run those too)
 docker compose -f compose.yml up -d redis mapproxy-server met-public-api met-tilling-api elevation_api
 
 # Give services a minute to pass their start_period healthchecks
@@ -99,7 +100,8 @@ tag.
 ## Secrets
 
 Real values for everything in `.env.example` live in Dokploy's own environment-variable
-UI — nothing sensitive is committed here.
+UI — nothing sensitive is committed here. See `API_KEYS.md` for exactly which env vars are
+real third-party API keys, what each one is for, and how to get one.
 
 ## Release flow: `staging/X.Y.Z` → `pre-prod` → `main`
 
