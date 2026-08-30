@@ -9,8 +9,7 @@
       "matchDatasources": ["docker"],
       "matchPackageNames": ["/^ghcr\\.io/unis-svalbard-weather-information//"],
       "automerge": true,
-      "automergeType": "branch",
-      "platformAutomerge": true
+      "automergeType": "branch"
     }
   ],
   "prConcurrentLimit": 0,

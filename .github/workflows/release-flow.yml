@@ -33,6 +33,12 @@ jobs:
 
       - name: Commit and push date update (if needed)
         if: steps.update_date.outputs.date_updated == 'true'
+        # continue-on-error: main now requires PRs (repository rule), so this direct
+        # push gets rejected (GH013) whenever the date is actually stale. That's just
+        # a cosmetic field - it must not block the Create GitHub Release step below,
+        # which is the actual point of this job. Confirmed via a real failed run: the
+        # push failure was silently skipping every step after it.
+        continue-on-error: true
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"

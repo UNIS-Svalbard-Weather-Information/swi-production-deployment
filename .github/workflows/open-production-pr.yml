@@ -43,6 +43,11 @@ jobs:
           existing=$(gh pr list --head pre-prod --base main --state open --json number --jq '.[0].number')
           if [ -n "$existing" ]; then
             gh pr edit "$existing" --title "$TITLE" --body "$BODY"
+          elif [ -z "$(git rev-list main..pre-prod)" ]; then
+            # Nothing to promote yet (e.g. right after pre-prod was first cut from
+            # main) - gh pr create fails outright on "No commits between main and
+            # pre-prod" instead of a graceful no-op, so check first.
+            echo "No commits between main and pre-prod - nothing to promote yet."
           else
             gh pr create --head pre-prod --base main --title "$TITLE" --body "$BODY"
           fi
