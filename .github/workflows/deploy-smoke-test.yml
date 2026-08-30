@@ -17,9 +17,29 @@ on:
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Block merge while a staging fix-PR is still pending
+        # Guards the merge order, not just the merge itself: staging/X.Y.Z can be
+        # re-promoted with a fix after its first trip to pre-prod (see the
+        # staging/release branch model), which opens a second staging -> pre-prod PR.
+        # If pre-prod -> main gets merged while that fix-PR is still open, production
+        # ships without the fix. Runs before the expensive stack-boot steps below so
+        # it fails fast.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PENDING=$(gh pr list --repo "${{ github.repository }}" --base pre-prod --state open \
+            --json headRefName --jq '[.[] | select(.headRefName | startswith("staging/"))] | length')
+          if [ "$PENDING" -gt 0 ]; then
+            echo "There is still an open staging/* -> pre-prod PR - merge or close it before promoting pre-prod to main."
+            exit 1
+          fi
 
       - name: Validate compose file
         run: docker compose -f compose.yml config >/dev/null
