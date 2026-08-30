@@ -49,7 +49,7 @@ services:
       - tiles-cache:/mapproxy/mbtiles/:rw
     restart: unless-stopped
     deploy:
-      replicas: 3
+      replicas: ${SWI_SERVICE_REPLICAS:-3}
       update_config:
         order: start-first
         failure_action: rollback
@@ -161,7 +161,7 @@ services:
       - met-realtime-data:/swi/data/realtime:ro
     restart: always
     deploy:
-      replicas: 3
+      replicas: ${SWI_SERVICE_REPLICAS:-3}
       update_config:
         order: start-first
         failure_action: rollback
@@ -212,7 +212,7 @@ services:
       - met-forecast-data:/swi/data/forecast:ro
     restart: always
     deploy:
-      replicas: 3
+      replicas: ${SWI_SERVICE_REPLICAS:-3}
       update_config:
         order: start-first
         failure_action: rollback
