@@ -174,6 +174,7 @@ def update_version_json(versions):
             "release": "dev-alpha",
             "release_name": "TheBestNameEver",
             "release_date": "1970-01-01",
+            "prerelease_type": None,
             "components": {},
         }
 
