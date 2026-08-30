@@ -142,3 +142,5 @@ for their own releases: commits accumulate into a standing release PR, and mergi
 the tag that triggers that repo's existing `docker-build-push.yml`. Renovate is also enabled
 in each of those repos for their own dependency/Action updates, independent of the
 deployment-repo automation above.
+
+Made with puffins and polar bears helped by Claude :-)
