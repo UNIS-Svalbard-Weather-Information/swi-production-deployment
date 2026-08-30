@@ -1,0 +1,112 @@
+name: Set prerelease type
+
+# Lets a collaborator with write access mark a staging cycle's release as alpha or
+# beta by commenting /alpha, /beta, or /stable (clears it) on that staging branch's
+# promotion PR into pre-prod. Only writes info/version.json.prerelease_type - the
+# core `release` field stays pure X.Y.Z semver throughout (cut-next-staging-branch's
+# placeholder math and update-info.py's baseline-bump math both depend on that shape).
+# promote-to-preprod.yml and release-flow.yml are what actually compose the qualifier
+# into a real tag (X.Y.Z-alphaN, X.Y.Z-alphaN-rcM) - this workflow only records it.
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  set-type:
+    if: github.event.issue.pull_request != null
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Parse the command
+        id: command
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          TRIMMED=$(printf '%s' "$COMMENT_BODY" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')
+          case "$TRIMMED" in
+            "/alpha") echo "type=alpha" >> "$GITHUB_OUTPUT" ;;
+            "/beta") echo "type=beta" >> "$GITHUB_OUTPUT" ;;
+            "/stable") echo "type=stable" >> "$GITHUB_OUTPUT" ;;
+            *) echo "type=" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Decide whether to proceed
+        if: steps.command.outputs.type != ''
+        id: decide
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMENTER: ${{ github.event.comment.user.login }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          PERM=$(gh api "repos/${{ github.repository }}/collaborators/$COMMENTER/permission" --jq '.permission' 2>/dev/null || echo "none")
+          BRANCH=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json headRefName --jq '.headRefName')
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+          if [ "$PERM" != "write" ] && [ "$PERM" != "admin" ]; then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "reason=you need write access to this repository to set the release type." >> "$GITHUB_OUTPUT"
+          elif [[ "$BRANCH" != staging/* ]]; then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "reason=this only applies to a staging/** branch's promotion PR (this PR's head is \`$BRANCH\`)." >> "$GITHUB_OUTPUT"
+          else
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Reply if not allowed
+        if: steps.command.outputs.type != '' && steps.decide.outputs.allowed == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
+            -f body="Ignored \`${{ steps.command.outputs.type }}\` - ${{ steps.decide.outputs.reason }}"
+
+      - name: Checkout the staging branch
+        if: steps.command.outputs.type != '' && steps.decide.outputs.allowed == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.decide.outputs.branch }}
+
+      - name: Compute and write the qualifier
+        if: steps.command.outputs.type != '' && steps.decide.outputs.allowed == 'true'
+        id: qualifier
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TYPE="${{ steps.command.outputs.type }}"
+          if [ "$TYPE" = "stable" ]; then
+            jq '.prerelease_type = null' info/version.json > info/version.json.tmp
+            mv info/version.json.tmp info/version.json
+            echo "summary=Cleared - this cycle will ship as a stable release." >> "$GITHUB_OUTPUT"
+          else
+            RELEASE=$(jq -r '.release' info/version.json)
+            MAX=$(gh api "repos/${{ github.repository }}/releases?per_page=100" \
+              --jq "[.[] | .tag_name | select(startswith(\"${RELEASE}-${TYPE}\")) | ltrimstr(\"${RELEASE}-${TYPE}\") | select(test(\"^[0-9]+\$\")) | tonumber] | max // 0")
+            NEXT=$((MAX + 1))
+            QUALIFIER="${TYPE}${NEXT}"
+            jq --arg q "$QUALIFIER" '.prerelease_type = $q' info/version.json > info/version.json.tmp
+            mv info/version.json.tmp info/version.json
+            echo "summary=Set to \`${RELEASE}-${QUALIFIER}\`." >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push
+        if: steps.command.outputs.type != '' && steps.decide.outputs.allowed == 'true'
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add info/version.json
+          git commit -m "Set prerelease_type via PR comment (${{ steps.command.outputs.type }})"
+          git push
+
+      - name: React and reply
+        if: steps.command.outputs.type != '' && steps.decide.outputs.allowed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -f content="+1" >/dev/null
+          gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
+            -f body="${{ steps.qualifier.outputs.summary }}"
