@@ -29,9 +29,19 @@ jobs:
           echo "branch=${{ github.event.inputs.staging_branch || github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
 
       - name: Read release version
+        # Composes in the alpha/beta qualifier if one was set via a /alpha or /beta PR
+        # comment (see set-prerelease-type.yml) - info/version.json.release itself
+        # always stays pure X.Y.Z semver, so this is the one place that turns it into
+        # the actual display/tag version everything downstream uses.
         id: version
         run: |
-          VERSION=$(jq -r '.release' info/version.json)
+          RELEASE=$(jq -r '.release' info/version.json)
+          QUALIFIER=$(jq -r '.prerelease_type // empty' info/version.json)
+          if [ -n "$QUALIFIER" ]; then
+            VERSION="${RELEASE}-${QUALIFIER}"
+          else
+            VERSION="$RELEASE"
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Compute next rc number
