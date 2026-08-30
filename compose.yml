@@ -75,6 +75,17 @@ services:
       - "traefik.http.middlewares.mapproxyheaders.headers.customrequestheaders.X-Forwarded-Proto=http"
       - "traefik.http.middlewares.mapproxyheaders.headers.customrequestheaders.X-Forwarded-Host=${SWI_MAPPROXY_HOST?Variable not set}"
       - "traefik.http.middlewares.mapproxyheaders.headers.customresponseheaders.Cache-Control=public, max-age=60, s-maxage=60"
+      # MapProxy itself unconditionally emits Access-Control-Allow-Origin: * on every
+      # response (confirmed directly against the backend, bypassing Traefik) -
+      # unrelated to mapproxy.yaml, it's MapProxy's own built-in default. Response
+      # middlewares apply in reverse of the request order below, so mapproxyheaders
+      # (listed second, so it sees the response first) strips that wildcard before
+      # mapproxycors (listed first, so it sees the response last) sets the real,
+      # origin-matched value - otherwise a non-matching Origin would still get the
+      # backend's raw "*" through untouched, since mapproxycors only sets the header
+      # on an actual match and never removes an existing one. An empty value here
+      # removes the header entirely (Traefik's documented behavior for this option).
+      - "traefik.http.middlewares.mapproxyheaders.headers.customresponseheaders.Access-Control-Allow-Origin="
 
       # Apply middlewares
       - "traefik.http.routers.mapproxy-server.middlewares=mapproxycors,mapproxyheaders"
@@ -309,8 +320,21 @@ services:
       - "traefik.http.middlewares.rewrite-oeapi.replacepathregex.regex=^${SWI_ELEVATION_API_ROUTE?Variable not set}(.*)"
       - "traefik.http.middlewares.rewrite-oeapi.replacepathregex.replacement=/api/$$1"
 
+      # elevationapi's own Flask-CORS setup unconditionally emits Access-Control-Allow-*
+      # (Origin: *, plus its own Methods/Headers list) on every response, confirmed
+      # directly against the backend bypassing Traefik - independent of Traefik's own
+      # oeapicors middleware above, and same underlying issue as mapproxy's. Response
+      # middlewares apply in reverse of the request-order list below, so this needs to
+      # be LAST in that list (closest to the backend, so it's applied to the response
+      # first) to strip the backend's own headers before oeapicors sets the real,
+      # origin-matched value - otherwise a non-matching Origin would still get the
+      # backend's raw "*" through untouched. Empty values remove the headers entirely.
+      - "traefik.http.middlewares.oeapistrip.headers.customresponseheaders.Access-Control-Allow-Origin="
+      - "traefik.http.middlewares.oeapistrip.headers.customresponseheaders.Access-Control-Allow-Methods="
+      - "traefik.http.middlewares.oeapistrip.headers.customresponseheaders.Access-Control-Allow-Headers="
+
       # Apply middlewares
-      - "traefik.http.routers.oeapi.middlewares=rewrite-oeapi,oeapicors"
+      - "traefik.http.routers.oeapi.middlewares=rewrite-oeapi,oeapicors,oeapistrip"
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf 'http://127.0.0.1:8080/api/v1/lookup?locations=78.22,15.62' >/dev/null || exit 1"]
       interval: 60s
