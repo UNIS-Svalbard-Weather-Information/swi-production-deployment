@@ -1,15 +1,21 @@
 name: Deployment smoke test
 
-# Gates the pre-prod -> main promotion PR: brings the real stack up behind the same
-# Traefik config used for local testing (see traefik-testing/readme.md), checks every
-# long-running service's healthcheck, and checks CORS headers on each routed endpoint.
-# This is a required status check on main's branch protection rule - a broken stack
-# cannot be merged to production. Set that requirement in repo settings; it can't be
-# configured from this workflow file.
+# Gates BOTH promotion PRs (staging -> pre-prod and pre-prod -> main): brings the real
+# stack up behind the same Traefik config used for local testing (see
+# traefik-testing/readme.md), checks every long-running service's healthcheck, and
+# checks CORS headers on each routed endpoint - both that an allowed origin is let
+# through and that a disallowed one is actually blocked, not just that some header is
+# present (a wildcard '*' config would pass a present-only check even when domain
+# restriction is completely broken - confirmed the hard way locally: mapproxy and
+# elevation_api both leaked their own backend-default "Access-Control-Allow-Origin: *"
+# straight through Traefik for origins that were never supposed to be allowed).
+# This must be a required status check on both main's AND pre-prod's branch protection
+# rules - a broken stack cannot be merged to either. Set that requirement in repo
+# settings; it can't be configured from this workflow file.
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, pre-prod]
     paths:
       - compose.yml
   workflow_dispatch: {}
@@ -17,17 +23,44 @@ on:
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Block merge while a staging fix-PR is still pending
+        # Only relevant when this run is gating the pre-prod -> main PR specifically -
+        # a staging -> pre-prod PR has no "is another fix still pending" concern of its
+        # own. Guards the merge order, not just the merge itself: staging/X.Y.Z can be
+        # re-promoted with a fix after its first trip to pre-prod (see the
+        # staging/release branch model), which opens a second staging -> pre-prod PR.
+        # If pre-prod -> main gets merged while that fix-PR is still open, production
+        # ships without the fix. Runs before the expensive stack-boot steps below so
+        # it fails fast.
+        if: github.event_name != 'pull_request' || github.event.pull_request.base.ref == 'main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PENDING=$(gh pr list --repo "${{ github.repository }}" --base pre-prod --state open \
+            --json headRefName --jq '[.[] | select(.headRefName | startswith("staging/"))] | length')
+          if [ "$PENDING" -gt 0 ]; then
+            echo "There is still an open staging/* -> pre-prod PR - merge or close it before promoting pre-prod to main."
+            exit 1
+          fi
 
       - name: Validate compose file
         run: docker compose -f compose.yml config >/dev/null
 
       - name: Write placeholder .env
+        # CORS_ALLOWED_ORIGINS deliberately mirrors production's real domain-bound
+        # shape (two specific origins, not '*') so the CORS check below actually
+        # exercises the allow/deny logic instead of trivially passing against a
+        # wildcard that can never fail.
         run: |
           cat > .env <<'EOF'
-          CORS_ALLOWED_ORIGINS=*
+          CORS_ALLOWED_ORIGINS=https://svalbardwatch.example.com,https://staging.svalbardwatch.example.com
           SWI_REDIS_PWD=smoke-test-password
           SWI_MAPPROXY_HOST=mapserver.localhost
           SWI_APIS_HOST=api.localhost
@@ -95,19 +128,33 @@ jobs:
       - name: CORS check
         run: |
           set -e
-          check() {
-            name="$1"; url="$2"
-            header=$(curl -k -s -D - -o /dev/null -H "Origin: https://example.com" "$url" | tr -d '\r' | grep -i '^access-control-allow-origin:' || true)
+          allowed_header() {
+            curl -k -s -D - -o /dev/null -H "Origin: $2" "$1" | tr -d '\r' | grep -i '^access-control-allow-origin:' || true
+          }
+          check_allowed() {
+            name="$1"; url="$2"; origin="$3"
+            header=$(allowed_header "$url" "$origin")
             if [ -z "$header" ]; then
-              echo "FAIL: $name ($url) - no access-control-allow-origin header"
+              echo "FAIL: $name ($url) - origin $origin should be allowed but got no access-control-allow-origin header"
               exit 1
             fi
-            echo "OK: $name -> $header"
+            echo "OK: $name allows $origin -> $header"
           }
-          check mapproxy "https://mapserver.localhost/"
-          check titiller "https://api.localhost/tiles/"
-          check elevationapi "https://api.localhost/oeapi/"
-          check metobs-backend "https://api.localhost/public/"
+          check_blocked() {
+            name="$1"; url="$2"; origin="https://not-allowed.invalid"
+            header=$(allowed_header "$url" "$origin")
+            if [ -n "$header" ]; then
+              echo "FAIL: $name ($url) - disallowed origin $origin got '$header' (CORS_ALLOWED_ORIGINS is not actually being enforced - a backend or Traefik default may be leaking through)"
+              exit 1
+            fi
+            echo "OK: $name correctly blocks $origin"
+          }
+          for svc in "mapproxy https://mapserver.localhost/" "titiller https://api.localhost/tiles/" "elevationapi https://api.localhost/oeapi/" "metobs-backend https://api.localhost/public/"; do
+            set -- $svc
+            check_allowed "$1" "$2" "https://svalbardwatch.example.com"
+            check_allowed "$1" "$2" "https://staging.svalbardwatch.example.com"
+            check_blocked "$1" "$2"
+          done
 
       - name: Tear down
         if: always()

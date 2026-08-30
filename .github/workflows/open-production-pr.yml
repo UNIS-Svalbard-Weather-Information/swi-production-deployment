@@ -13,8 +13,13 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout pre-prod
+        # ref pinned explicitly: workflow_dispatch checks out whatever ref is
+        # selected in the UI (defaults to the repo's default branch, i.e. main) if
+        # left unset, not necessarily pre-prod - confirmed via a real run that
+        # checked out main instead and broke every "pre-prod" git revision below.
         uses: actions/checkout@v4
         with:
+          ref: pre-prod
           fetch-depth: 0
 
       - name: Read release version
@@ -31,7 +36,7 @@ jobs:
             echo "Promotes pre-prod (release \`${{ steps.version.outputs.version }}\`) to production."
             echo
             echo "Component versions changing:"
-            git diff main pre-prod -- info/version.json | grep '"version"' || echo "(no component version changes)"
+            git diff origin/main HEAD -- info/version.json | grep '"version"' || echo "(no component version changes)"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -44,7 +49,7 @@ jobs:
           existing=$(gh pr list --head pre-prod --base main --state open --json number --jq '.[0].number')
           if [ -n "$existing" ]; then
             gh pr edit "$existing" --title "$TITLE" --body "$BODY"
-          elif [ -z "$(git rev-list main..pre-prod)" ]; then
+          elif [ -z "$(git rev-list origin/main..HEAD)" ]; then
             # Nothing to promote yet (e.g. right after pre-prod was first cut from
             # main) - gh pr create fails outright on "No commits between main and
             # pre-prod" instead of a graceful no-op, so check first.
