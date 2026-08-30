@@ -3,3 +3,7 @@
 # Except version.env and .env.example
 !.env.example
 !version.env
+
+*.crt
+*.pem
+*.key

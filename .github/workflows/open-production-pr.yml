@@ -1,0 +1,48 @@
+name: Open production promotion PR
+
+on:
+  push:
+    branches: [pre-prod]
+
+jobs:
+  open-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout pre-prod
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read release version
+        id: version
+        run: |
+          VERSION=$(jq -r '.release' info/version.json)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Summarize component changes vs main
+        id: summary
+        run: |
+          {
+            echo "body<<EOF"
+            echo "Promotes pre-prod (release \`${{ steps.version.outputs.version }}\`) to production."
+            echo
+            echo "Component versions changing:"
+            git diff main pre-prod -- info/version.json | grep '"version"' || echo "(no component version changes)"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open or update the promotion PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: "Promote ${{ steps.version.outputs.version }} to production"
+          BODY: ${{ steps.summary.outputs.body }}
+        run: |
+          existing=$(gh pr list --head pre-prod --base main --state open --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --title "$TITLE" --body "$BODY"
+          else
+            gh pr create --head pre-prod --base main --title "$TITLE" --body "$BODY"
+          fi

@@ -1,0 +1,53 @@
+name: Promote to pre-prod
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [pre-prod]
+
+jobs:
+  prerelease-and-lock:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      administration: write
+    steps:
+      - name: Checkout pre-prod
+        uses: actions/checkout@v4
+        with:
+          ref: pre-prod
+
+      - name: Read release version
+        id: version
+        run: |
+          VERSION=$(jq -r '.release' info/version.json)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub pre-release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.version }}-rc1
+          release_name: ${{ steps.version.outputs.version }}-rc1 (pre-release)
+          body: |
+            Pre-release for ${{ steps.version.outputs.version }}, now deployed to pre-prod
+            from `${{ github.event.pull_request.head.ref }}`.
+          prerelease: true
+
+      - name: Lock the release branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          gh api --method PUT "repos/${{ github.repository }}/branches/$BRANCH/protection" \
+            --input - <<'EOF'
+          {
+            "required_status_checks": null,
+            "enforce_admins": true,
+            "required_pull_request_reviews": null,
+            "restrictions": null,
+            "lock_branch": true
+          }
+          EOF
