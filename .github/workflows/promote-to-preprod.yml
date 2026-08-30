@@ -4,19 +4,29 @@ on:
   pull_request:
     types: [closed]
     branches: [pre-prod]
+  workflow_dispatch:
+    inputs:
+      release_branch:
+        description: "The release/X.Y.Z branch that was (or should be treated as) promoted to pre-prod"
+        required: true
+        type: string
 
 jobs:
   prerelease-and-lock:
-    if: github.event.pull_request.merged == true
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      administration: write
     steps:
       - name: Checkout pre-prod
         uses: actions/checkout@v4
         with:
           ref: pre-prod
+
+      - name: Determine the release branch being promoted
+        id: source
+        run: |
+          echo "branch=${{ github.event.inputs.release_branch || github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
 
       - name: Read release version
         id: version
@@ -33,13 +43,23 @@ jobs:
           release_name: ${{ steps.version.outputs.version }}-rc1 (pre-release)
           body: |
             Pre-release for ${{ steps.version.outputs.version }}, now deployed to pre-prod
-            from `${{ github.event.pull_request.head.ref }}`.
+            from `${{ steps.source.outputs.branch }}`.
           prerelease: true
 
       - name: Lock the release branch
+        # continue-on-error: this is nice-to-have (keeping the release branch as a
+        # frozen historical record), not the point of this job - the pre-release
+        # above is. Branch-protection changes need real admin rights on the repo,
+        # which GITHUB_TOKEN can never hold under any workflow-permissions setting
+        # ("administration" isn't even a valid key in the permissions: block - having
+        # it there was failing this whole workflow before any job could start).
+        # Add an ADMIN_TOKEN secret (a PAT/GitHub App token with Administration:
+        # write on this repo) to make this step actually take effect; until then it
+        # fails harmlessly and the branch just stays unlocked.
+        continue-on-error: true
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH: ${{ github.event.pull_request.head.ref }}
+          GH_TOKEN: ${{ secrets.ADMIN_TOKEN || secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.source.outputs.branch }}
         run: |
           gh api --method PUT "repos/${{ github.repository }}/branches/$BRANCH/protection" \
             --input - <<'EOF'

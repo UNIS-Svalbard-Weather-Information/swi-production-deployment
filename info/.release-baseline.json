@@ -1,13 +1,13 @@
 {
-  "release": "2.0.0-alpha2",
+  "release": "2.0.1",
   "components": {
     "swi-mapproxy": "trixie-p3.13-mp6.0.1-0.0.12",
     "swi-mapcache-seaice": "0.0.10",
     "swi-avalanche-caching": "0.0.3",
     "swi-metobs-backend": "3.0.4",
-    "swi-elevationapi": "0.0.1",
     "swi-titiller": "0.0.1",
     "swi-metobs-caching": "0.0.3",
-    "swi-aromearctic-caching": "0.0.6"
+    "swi-aromearctic-caching": "0.0.6",
+    "swi-elevationapi": "0.0.1"
   }
 }
