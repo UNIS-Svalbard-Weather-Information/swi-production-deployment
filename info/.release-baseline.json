@@ -1,5 +1,5 @@
 {
-  "release": "2.0.1",
+  "release": "2.0.2",
   "components": {
     "swi-mapproxy": "trixie-p3.13-mp6.0.1-0.0.12",
     "swi-mapcache-seaice": "0.0.10",
