@@ -99,6 +99,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
     steps:
       - name: Checkout main
         uses: actions/checkout@v4
@@ -139,3 +140,15 @@ jobs:
           default_author: github_actions
           new_branch: "staging/${{ steps.next.outputs.new_version }}"
           message: "Start release cycle ${{ steps.next.outputs.new_version }}"
+
+      - name: Trigger the pre-prod promotion PR check
+        # The push above is authored by the default GITHUB_TOKEN, and GitHub never
+        # fires another workflow's push trigger off a GITHUB_TOKEN-authored push (the
+        # same anti-recursion guard that kept docker-build-push.yml from firing after
+        # release-please tags) - so ensure-preprod-pr.yml's push: staging/** trigger
+        # silently never catches this, and the new branch would sit unpromoted until
+        # its daily fallback schedule next runs. workflow_dispatch is explicitly
+        # exempt from that restriction, so dispatch it directly instead of waiting.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run ensure-preprod-pr.yml --ref main
