@@ -46,20 +46,39 @@ jobs:
             from `${{ steps.source.outputs.branch }}`.
           prerelease: true
 
-      - name: Lock the release branch
-        # continue-on-error: this is nice-to-have (keeping the release branch as a
-        # frozen historical record), not the point of this job - the pre-release
-        # above is. Branch-protection changes need real admin rights on the repo,
-        # which GITHUB_TOKEN can never hold under any workflow-permissions setting
-        # ("administration" isn't even a valid key in the permissions: block - having
-        # it there was failing this whole workflow before any job could start).
-        # Add an ADMIN_TOKEN secret (a PAT/GitHub App token with Administration:
-        # write on this repo) to make this step actually take effect; until then it
-        # fails harmlessly and the branch just stays unlocked.
+      - name: Retire the release branch out of Renovate's namespace
+        # Renovate's baseBranchPatterns (/^release\//) matches every branch under
+        # release/*, with no concept of "most recent" - it's a set match, not a rank.
+        # Once a release branch is promoted, it needs to stop being a Renovate target
+        # (further bumps belong on the *next* release branch), while still sticking
+        # around as a historical record per the "keep a branch per release" decision.
+        # Renaming it out of release/* achieves both with a single normal-permission
+        # call - unlike changing branch protection, renaming only needs push access
+        # (contents: write, already granted above), no admin/PAT required.
+        id: retire
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.source.outputs.branch }}
+        run: |
+          NEW_NAME="released/${BRANCH#release/}"
+          gh api --method POST "repos/${{ github.repository }}/branches/$BRANCH/rename" \
+            -f new_name="$NEW_NAME"
+          echo "new_name=$NEW_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Lock the retired branch
+        # continue-on-error: true immutability is still nice-to-have on top of the
+        # rename above (which already does the part that actually matters - keeping
+        # Renovate off it). Branch-protection changes need real admin rights the
+        # default token can never hold under any workflow-permissions setting
+        # ("administration" isn't a valid permissions: key at all - having it there
+        # was failing this whole workflow before any job could start). Add an
+        # ADMIN_TOKEN secret (a PAT/GitHub App token with Administration: write on
+        # this repo) to make this step actually take effect; until then it fails
+        # harmlessly and the branch is still safely out of Renovate's way regardless.
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.ADMIN_TOKEN || secrets.GITHUB_TOKEN }}
-          BRANCH: ${{ steps.source.outputs.branch }}
+          BRANCH: ${{ steps.retire.outputs.new_name }}
         run: |
           gh api --method PUT "repos/${{ github.repository }}/branches/$BRANCH/protection" \
             --input - <<'EOF'
