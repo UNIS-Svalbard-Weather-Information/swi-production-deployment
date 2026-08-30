@@ -12,6 +12,7 @@ on:
     branches: [main]
     paths:
       - compose.yml
+  workflow_dispatch: {}
 
 jobs:
   smoke-test:

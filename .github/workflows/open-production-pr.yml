@@ -3,6 +3,7 @@ name: Open production promotion PR
 on:
   push:
     branches: [pre-prod]
+  workflow_dispatch: {}
 
 jobs:
   open-pr:
