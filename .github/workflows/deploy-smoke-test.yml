@@ -50,14 +50,17 @@ jobs:
             exit 1
           fi
 
-      - name: Validate compose file
-        run: docker compose -f compose.yml config >/dev/null
-
       - name: Write placeholder .env
         # CORS_ALLOWED_ORIGINS deliberately mirrors production's real domain-bound
         # shape (two specific origins, not '*') so the CORS check below actually
         # exercises the allow/deny logic instead of trivially passing against a
-        # wildcard that can never fail.
+        # wildcard that can never fail. Must run before "Validate compose file" -
+        # compose.yml uses required (?Variable not set) env vars, so validating
+        # against no .env at all fails every time regardless of whether the file is
+        # actually valid. Confirmed via a real run: this ordering bug meant this
+        # check had never actually passed since path-filtering on compose.yml was
+        # added - it always failed at validation before ever reaching the real
+        # health/CORS checks that are the actual point of this workflow.
         run: |
           cat > .env <<'EOF'
           CORS_ALLOWED_ORIGINS=https://svalbardwatch.example.com,https://staging.svalbardwatch.example.com
@@ -73,6 +76,9 @@ jobs:
           SWI_METOBS_HOLFUY_API_KEY=smoke-test-key
           SWI_METOBS_FROST_API_KEY=smoke-test-key
           EOF
+
+      - name: Validate compose file
+        run: docker compose -f compose.yml config >/dev/null
 
       - name: Resolve *.localhost hostnames explicitly
         run: |
