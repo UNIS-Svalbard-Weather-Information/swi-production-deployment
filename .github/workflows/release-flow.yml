@@ -139,12 +139,32 @@ jobs:
           fetch-depth: 0
 
       - name: Delete the just-shipped staging branch
+        # Reconstructing the branch name from info/version.json.release isn't
+        # reliable: the auto version-computation in update-info.py (see
+        # update_services_info.yml) can recompute a different final version mid-cycle
+        # based on the actual component bumps, without renaming the staging branch
+        # itself. Confirmed for real: staging/2.0.2 ended up shipping as version
+        # 2.0.3 - main's version.json said "2.0.3" here while the branch that
+        # actually carried the content was still named staging/2.0.2, so the old
+        # name-reconstruction looked for (and silently failed to find) a branch that
+        # never existed, leaving staging/2.0.2 orphaned indefinitely. Instead, find
+        # and delete every staging/** branch that's now a pure ancestor of main -
+        # correct regardless of what it's named, since a promoted staging branch's
+        # content is always fully captured in main by this point (that's what the
+        # whole pipeline exists to guarantee).
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          SHIPPED_VERSION=$(jq -r '.release' info/version.json)
-          gh api --method DELETE "repos/${{ github.repository }}/git/refs/heads/staging/${SHIPPED_VERSION}" || \
-            echo "No staging/${SHIPPED_VERSION} branch to delete (already gone, or this was a manual/out-of-band run) - continuing."
+          for branch in $(gh api "repos/${{ github.repository }}/branches?per_page=100" \
+            --jq '.[] | select(.name | startswith("staging/")) | .name'); do
+            if [ -z "$(git rev-list "HEAD..origin/$branch" 2>/dev/null)" ]; then
+              echo "$branch is fully merged into main - deleting."
+              gh api --method DELETE "repos/${{ github.repository }}/git/refs/heads/$branch" || \
+                echo "Could not delete $branch - continuing."
+            else
+              echo "$branch still has unmerged commits - leaving it."
+            fi
+          done
 
       - name: Compute next staging branch version
         id: next
