@@ -106,8 +106,8 @@ real third-party API keys, what each one is for, and how to get one.
 ## Release flow: `staging/X.Y.Z` → `pre-prod` → `main`
 
 1. **`staging/X.Y.Z`** — one branch per release cycle, cut from `main` the moment the
-   previous cycle ships. Renovate opens image-bump PRs here as new versions land on GHCR
-   (`renovate.json`, `baseBranchPatterns: ["/^staging\\//"]`, auto-merge for those bumps).
+   previous cycle ships. New image versions land here automatically - see
+   [Component version updates](#component-version-updates) below.
    `info/version.json`'s `release` field is kept continuously up to date during the cycle —
    its value is derived automatically from the highest-severity version bump seen across
    the services that actually changed (see `update-info.py`), not incremented by hand. A
@@ -133,6 +133,37 @@ real third-party API keys, what each one is for, and how to get one.
 See `.github/workflows/` for the workflows implementing each step, and
 `traefik-testing/readme.md` for how to exercise the stack locally before relying on the
 smoke test alone.
+
+## Component version updates
+
+`.github/workflows/update-versions.yml` runs `update_versions.py` every day at 06:00 UTC,
+and on demand: *Actions → Update component versions → Run workflow*. Its *dry run* option
+only writes the job summary.
+
+For every image in the compose files, it reads the registry's tag list, so a GitHub
+release whose image was never pushed is never picked. It takes the newest tag with the
+same shape as the pinned one:
+
+- `3.0.6` only moves to `X.Y.Z`, and `7.4-alpine` only to `X.Y-alpine`.
+- `latest`, `3.1`, `-DEV` and similar tags are ignored.
+
+Then, against the newest `staging/*` branch:
+
+- **Our `ghcr.io/unis-svalbard-weather-information/*` images**, majors included:
+  - committed directly as `[BOT] Bump service images: …`, together with the regenerated
+    `info/version.json`
+  - the pre-prod promotion PR is then (re)opened right away
+- **Third-party images** (`redis`, and `traefik` in `traefik-testing/`):
+  - one PR each, from a `deps/<image>` branch, with the upstream release notes in its body
+  - never merged automatically; a newer upstream version refreshes the same PR
+
+`.github/version-updater.yml` controls per-image behaviour:
+
+- skip an image (`ignore:`)
+- give it a custom tag pattern, as for `swi-mapproxy`'s `trixie-p3.13-mp6.0.1-0.0.12` scheme
+- point its PR at a release-notes repo
+
+Locally, run `python update_versions.py --dry-run`. Tests: `pytest tests/`.
 
 ## Per-service repos
 
