@@ -16,7 +16,7 @@ name: Deployment smoke test
 # No paths: filter - deliberately runs on every PR into main or pre-prod regardless
 # of which files changed. Confirmed for real: a normal release cycle only bumps
 # info/version.json's placeholder, never compose.yml itself (that only changes when
-# Renovate or a human bumps an image tag), so a paths: [compose.yml] filter meant
+# update-versions.yml or a human bumps an image tag), so a paths: [compose.yml] filter meant
 # this never actually ran for two full production releases (2.0.4, 2.0.5) - they
 # shipped with zero automated health/CORS verification and nothing even flagged it
 # as missing (mergeable_state showed "clean" throughout). The check is cheap and

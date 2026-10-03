@@ -1,0 +1,21 @@
+# Config for update_versions.py (run daily by .github/workflows/update-versions.yml).
+#
+# Keys under `images` are image names exactly as written in the compose files, without
+# the tag. Images not listed here still get checked, with the default rule: the newest
+# tag with the same shape as the pinned one (same prefix, suffix and number of numeric
+# parts - so `7.4-alpine` only moves to `X.Y-alpine`, `3.0.6` only to `X.Y.Z`).
+
+# Images never to touch, e.g. while a known-bad release is out.
+ignore: []
+
+images:
+  # Tagged by hand as <os>-p<python>-mp<mapproxy>-<version>: only compare the trailing
+  # version, whatever base image it was built on.
+  ghcr.io/unis-svalbard-weather-information/swi-mapproxy:
+    tag_pattern: '^trixie-p\d+\.\d+-mp\d+\.\d+\.\d+-(?P<version>\d+\.\d+\.\d+)$'
+
+  # Third-party images: bumps go through a PR whose body lists these repos' releases.
+  redis:
+    release_notes_repo: redis/redis
+  traefik:
+    release_notes_repo: traefik/traefik
