@@ -160,8 +160,8 @@ jobs:
     # Starts the next staging/X.Y.Z cycle immediately after this one reaches
     # production: deletes the just-shipped staging branch (its content is fully
     # captured in main + the release/X.Y.Z marker just created above) and cuts a
-    # fresh one, which just sits open collecting Renovate's image bumps (see
-    # renovate.json) until someone promotes it via a PR into pre-prod.
+    # fresh one, which just sits open collecting image bumps (see
+    # update-versions.yml) until someone promotes it via a PR into pre-prod.
     needs: release
     runs-on: ubuntu-latest
     permissions:

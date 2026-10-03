@@ -1,0 +1,167 @@
+name: Update component versions
+
+# Replaces Renovate (which never landed a single bump here - every image-tag change in
+# compose.yml so far was made by hand). Checks every image pinned in the compose files
+# for a newer tag that actually exists in its registry (update_versions.py) and:
+# - our own ghcr.io/unis-svalbard-weather-information/* images: commits the bumps,
+#   plus the regenerated info/version.json, straight onto the active staging/X.Y.Z
+#   branch - same as Renovate's branch automerge was configured to do. Promoting
+#   staging to pre-prod stays the human gate (ensure-preprod-pr.yml).
+# - third-party images (redis, traefik, ...): one PR per image into that staging
+#   branch, from a deps/<image> branch, with the upstream release notes in the body.
+#   Never committed directly. Refreshed in place on later runs, not duplicated.
+#
+# Image tags to skip or special-case: .github/version-updater.yml.
+
+on:
+  schedule:
+    # Before ensure-preprod-pr.yml's 08:00 reconciliation run.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only report what would change (job summary), don't commit or open PRs"
+        type: boolean
+        default: false
+
+concurrency:
+  group: version-updater
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - name: Find the active staging branch
+        id: staging
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          branch=$(gh api "repos/${{ github.repository }}/branches?per_page=100" \
+            --jq '.[] | select(.name | startswith("staging/")) | .name' | sort -V | tail -n 1)
+          if [ -z "$branch" ]; then
+            echo "::notice::No staging/* branch - between release cycles, nothing to update."
+          fi
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout ${{ steps.staging.outputs.branch }}
+        if: steps.staging.outputs.branch != ''
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.staging.outputs.branch }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        if: steps.staging.outputs.branch != ''
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: PIP Install
+        if: steps.staging.outputs.branch != ''
+        run: pip install pyyaml
+
+      - name: Check for new versions
+        if: steps.staging.outputs.branch != ''
+        id: check
+        run: |
+          python update_versions.py --dry-run --summary --json "$RUNNER_TEMP/plan.json"
+          echo "internal=$(jq '[.[] | select(.kind == "internal")] | length' "$RUNNER_TEMP/plan.json")" >> "$GITHUB_OUTPUT"
+          echo "external=$(jq -c '[.[] | select(.kind == "external") | .name] | unique' "$RUNNER_TEMP/plan.json")" >> "$GITHUB_OUTPUT"
+
+      - name: Apply internal bumps
+        if: steps.staging.outputs.branch != '' && !inputs.dry_run && steps.check.outputs.internal != '0'
+        id: internal
+        run: |
+          python update_versions.py --only internal --json "$RUNNER_TEMP/internal.json"
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+          # Same as update_services_info.yml - its push trigger won't fire for the
+          # GITHUB_TOKEN-authored push below, so regenerate version.json here and land
+          # it in the same commit.
+          python update-info.py
+          TODAY=$(date +'%Y-%m-%d')
+          if [ "$(jq -r '.release_date' info/version.json)" \< "$TODAY" ]; then
+            jq --arg d "$TODAY" '.release_date = $d' info/version.json > info/version.json.tmp && \
+              mv info/version.json.tmp info/version.json
+          fi
+
+      - name: Commit internal bumps
+        if: steps.internal.outputs.changed == 'true'
+        run: |
+          {
+            jq -r '"[BOT] Bump service images: " + ([.[] | "\(.repo) \(.old) → \(.new)"] | join(", "))' "$RUNNER_TEMP/internal.json"
+            echo
+            jq -r '.[] | "- \(.repo) \(.old) → \(.new): \(.notes_url)"' "$RUNNER_TEMP/internal.json"
+          } > "$RUNNER_TEMP/message.txt"
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add -A -- '*compose*.yml' info/version.json
+          git commit -F "$RUNNER_TEMP/message.txt"
+          git push origin "HEAD:${{ steps.staging.outputs.branch }}"
+
+      - name: Trigger the pre-prod promotion PR check
+        # The push above is authored by GITHUB_TOKEN, so ensure-preprod-pr.yml's
+        # push: staging/** trigger never fires off it (see the same step in
+        # release-flow.yml). workflow_dispatch is exempt from that guard.
+        if: steps.internal.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run ensure-preprod-pr.yml --ref main
+
+      - name: Open or refresh third-party bump PRs
+        if: steps.staging.outputs.branch != '' && !inputs.dry_run && steps.check.outputs.external != '[]'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STAGING: ${{ steps.staging.outputs.branch }}
+          EXTERNAL: ${{ steps.check.outputs.external }}
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+
+          jq -r '.[]' <<< "$EXTERNAL" | while IFS= read -r name; do
+            branch="deps/$(echo "$name" | tr '/:' '--')"
+            git checkout --quiet -B "$branch" "origin/$STAGING"
+
+            python update_versions.py --only external --image "$name" \
+              --json "$RUNNER_TEMP/change.json" --notes "$RUNNER_TEMP/body.md"
+            if git diff --quiet; then
+              echo "$name: nothing to apply any more - skipping."
+              continue
+            fi
+            title=$(jq -r '"Bump \(.[0].name) \(.[0].old) → \(.[0].new)"' "$RUNNER_TEMP/change.json")
+            {
+              echo "Opened automatically by \`update-versions.yml\` - third-party images are never bumped without review."
+              echo
+              cat "$RUNNER_TEMP/body.md"
+            } > "$RUNNER_TEMP/pr-body.md"
+
+            git add -A -- '*compose*.yml'
+            git commit --quiet -m "$title"
+
+            # Only force-push when the content actually changed (new upstream version,
+            # or staging moved on), so an open PR isn't churned every day.
+            if git rev-parse --verify --quiet "origin/$branch" >/dev/null && \
+               git diff --quiet "origin/$branch" HEAD; then
+              echo "$name: $branch already up to date."
+            else
+              git push --force origin "HEAD:refs/heads/$branch"
+            fi
+
+            existing=$(gh pr list --head "$branch" --base "$STAGING" --state open --json number --jq '.[0].number')
+            if [ -n "$existing" ]; then
+              gh pr edit "$existing" --title "$title" --body-file "$RUNNER_TEMP/pr-body.md"
+              echo "$name: refreshed PR #$existing"
+            else
+              gh pr create --head "$branch" --base "$STAGING" --title "$title" --body-file "$RUNNER_TEMP/pr-body.md"
+            fi
+          done

@@ -7,3 +7,6 @@
 *.crt
 *.pem
 *.key
+# Python
+__pycache__/
+.pytest_cache/
