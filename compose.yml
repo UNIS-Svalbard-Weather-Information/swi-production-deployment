@@ -110,7 +110,7 @@ services:
       - internal
 
   CRON_seaice_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-mapcache-seaice:0.0.10
+    image: ghcr.io/unis-svalbard-weather-information/swi-mapcache-seaice:0.0.15
     labels:
       - "traefik.enable=false"
     volumes:
@@ -125,7 +125,7 @@ services:
       - internal
 
   CRON_avalanche_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:0.0.3
+    image: ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:0.0.5
     labels:
       - "traefik.enable=false"
     volumes:
@@ -154,7 +154,7 @@ services:
     # merged. Once it merges and a new image is released, switch this healthcheck to
     # /ready so Swarm's start-first rolling update actually gates on real readiness
     # instead of bare liveness.
-    image: ghcr.io/unis-svalbard-weather-information/swi-metobs-backend:3.0.6
+    image: ghcr.io/unis-svalbard-weather-information/swi-metobs-backend:3.1.0
     volumes:
       - met-forecast-data:/swi/data/forecast:ro
       - met-historical-data:/swi/data/historical:ro
@@ -259,7 +259,7 @@ services:
   # TODO: add a monitoring/heartbeat ping once the cache run completes, matching the
   # SWI_SEAICE_MONITORING_ENDPOINT / SWI_AVALANCHE_MONITORING_ENDPOINT pattern above.
   CRON_metobs_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-metobs-caching:0.0.3
+    image: ghcr.io/unis-svalbard-weather-information/swi-metobs-caching:0.0.5
     labels:
       - "traefik.enable=false"
     volumes:
@@ -276,7 +276,7 @@ services:
   # via a Dokploy Schedule, same DOCKER_CRON stay-alive pattern as above.
   # TODO: add a monitoring/heartbeat ping once the cache run completes.
   CRON_AAforecast_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-aromearctic-caching:0.0.6
+    image: ghcr.io/unis-svalbard-weather-information/swi-aromearctic-caching:0.0.8
     labels:
       - "traefik.enable=false"
     volumes:
@@ -289,7 +289,7 @@ services:
   # ── elevation-service ───────────────────────────────────────────────────
 
   elevation_api:
-    image: ghcr.io/unis-svalbard-weather-information/swi-elevationapi:0.0.1
+    image: ghcr.io/unis-svalbard-weather-information/swi-elevationapi:0.0.4
     volumes:
       - elevation_data:/code/data
     restart: always
