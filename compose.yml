@@ -154,7 +154,7 @@ services:
     # merged. Once it merges and a new image is released, switch this healthcheck to
     # /ready so Swarm's start-first rolling update actually gates on real readiness
     # instead of bare liveness.
-    image: ghcr.io/unis-svalbard-weather-information/swi-metobs-backend:3.1.0
+    image: ghcr.io/unis-svalbard-weather-information/swi-metobs-backend:3.2.0
     volumes:
       - met-forecast-data:/swi/data/forecast:ro
       - met-historical-data:/swi/data/historical:ro
