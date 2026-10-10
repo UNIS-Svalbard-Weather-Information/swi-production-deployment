@@ -1,7 +1,7 @@
 {
-  "release": "2.0.9",
+  "release": "2.1.0",
   "release_name": "PleaseSuggestArticAnimalsNames",
-  "release_date": "2026-10-03",
+  "release_date": "2026-10-10",
   "prerelease_type": null,
   "components": {
     "swi-mapproxy": {
@@ -10,15 +10,15 @@
     },
     "swi-mapcache-seaice": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-mapcache-seaice",
-      "version": "0.0.10"
+      "version": "0.0.15"
     },
     "swi-avalanche-caching": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-avalanche-caching",
-      "version": "0.0.3"
+      "version": "0.0.5"
     },
     "swi-metobs-backend": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend",
-      "version": "3.0.6"
+      "version": "3.2.0"
     },
     "swi-titiller": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-titiller",
@@ -26,15 +26,19 @@
     },
     "swi-metobs-caching": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-caching",
-      "version": "0.0.3"
+      "version": "0.0.5"
     },
     "swi-aromearctic-caching": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-aromearctic-caching",
-      "version": "0.0.6"
+      "version": "0.0.8"
     },
     "swi-elevationapi": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-elevationapi",
-      "version": "0.0.1"
+      "version": "0.0.4"
+    },
+    "swi-frontend": {
+      "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-frontend",
+      "version": "2.0.0"
     }
   }
 }

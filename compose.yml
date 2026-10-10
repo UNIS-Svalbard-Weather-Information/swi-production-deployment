@@ -10,13 +10,21 @@ name: SW-SWI-SRM-Services
 # application level (FastAPI CORSMiddleware, driven by its own CORS_ALLOWED_ORIGINS env
 # var) so it intentionally does NOT also get a Traefik CORS middleware here — stacking
 # both would produce duplicate/conflicting Access-Control-Allow-Origin headers.
+#
+# Staging vs production is decided purely by environment variables (same file on both):
+#   - SWI_AUTH_MIDDLEWARE=swi-gate (+ SWI_BASICAUTH_USERS) puts HTTP basic auth in front of
+#     every public router. Unset (production) it falls back to the no-op swi-open.
+#   - SWI_{MAPPROXY,TITILER,METOBS,FRONTEND}_REPLICAS set the replica counts.
+#   - NUXT_* configure the frontend (direct mode in production, same-origin proxy mode on
+#     staging so a single basic-auth login covers the whole app). See .env.example.
+# Titiler is only reachable through titiler-cache (nginx, 10 min TTL), never directly.
 
 services:
 
   # ── shared ──────────────────────────────────────────────────────────────
 
   redis:
-    image: redis:7.4-alpine
+    image: redis:8.10-alpine
     restart: unless-stopped
     labels:
       - "traefik.enable=false"
@@ -49,7 +57,7 @@ services:
       - tiles-cache:/mapproxy/mbtiles/:rw
     restart: unless-stopped
     deploy:
-      replicas: ${SWI_SERVICE_REPLICAS:-3}
+      replicas: ${SWI_MAPPROXY_REPLICAS:-3}
       update_config:
         order: start-first
         failure_action: rollback
@@ -62,6 +70,7 @@ services:
       - "traefik.http.routers.mapproxy-server.rule=Host(`${SWI_MAPPROXY_HOST?Variable not set}`)"
       - "traefik.http.routers.mapproxy-server.entrypoints=websecure"
       - "traefik.http.routers.mapproxy-server.tls=true"
+      - "traefik.http.routers.mapproxy-server.tls.certresolver=${TRAEFIK_CERT_RESOLVER-letsencrypt}"
       - "traefik.http.services.mapproxy-server.loadbalancer.server.port=8080"
       - "traefik.docker.network=dokploy-network"
 
@@ -88,7 +97,7 @@ services:
       - "traefik.http.middlewares.mapproxyheaders.headers.customresponseheaders.Access-Control-Allow-Origin="
 
       # Apply middlewares
-      - "traefik.http.routers.mapproxy-server.middlewares=mapproxycors,mapproxyheaders"
+      - "traefik.http.routers.mapproxy-server.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open},mapproxycors,mapproxyheaders"
 
       # Sticky Session
       - "traefik.http.services.mapproxy-server.loadbalancer.sticky=true"
@@ -110,7 +119,7 @@ services:
       - internal
 
   CRON_seaice_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-mapcache-seaice:0.0.10
+    image: ghcr.io/unis-svalbard-weather-information/swi-mapcache-seaice:0.0.15
     labels:
       - "traefik.enable=false"
     volumes:
@@ -125,7 +134,7 @@ services:
       - internal
 
   CRON_avalanche_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:0.0.3
+    image: ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:0.0.5
     labels:
       - "traefik.enable=false"
     volumes:
@@ -154,14 +163,14 @@ services:
     # merged. Once it merges and a new image is released, switch this healthcheck to
     # /ready so Swarm's start-first rolling update actually gates on real readiness
     # instead of bare liveness.
-    image: ghcr.io/unis-svalbard-weather-information/swi-metobs-backend:3.0.6
+    image: ghcr.io/unis-svalbard-weather-information/swi-metobs-backend:3.2.0
     volumes:
       - met-forecast-data:/swi/data/forecast:ro
       - met-historical-data:/swi/data/historical:ro
       - met-realtime-data:/swi/data/realtime:ro
     restart: always
     deploy:
-      replicas: ${SWI_SERVICE_REPLICAS:-3}
+      replicas: ${SWI_METOBS_REPLICAS:-3}
       update_config:
         order: start-first
         failure_action: rollback
@@ -174,6 +183,7 @@ services:
       - "traefik.http.routers.metobs.rule=Host(`${SWI_APIS_HOST?Variable not set}`)  && PathPrefix(`${SWI_METOBS_API_ROUTE?Variable not set}`)"
       - "traefik.http.routers.metobs.entrypoints=websecure"
       - "traefik.http.routers.metobs.tls=true"
+      - "traefik.http.routers.metobs.tls.certresolver=${TRAEFIK_CERT_RESOLVER-letsencrypt}"
       - "traefik.http.services.metobs.loadbalancer.server.port=${SWI_METOBS_INTERNAL_PORT:-8085}"
       - "traefik.docker.network=dokploy-network"
 
@@ -183,7 +193,7 @@ services:
       # Middleware
       - "traefik.http.middlewares.metobs-stripprefix.stripprefix.prefixes=${SWI_METOBS_API_ROUTE?Variable not set}"
 
-      - "traefik.http.routers.metobs.middlewares=metobs-stripprefix"
+      - "traefik.http.routers.metobs.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open},metobs-stripprefix"
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf 'http://127.0.0.1:${SWI_METOBS_INTERNAL_PORT:-8085}/health' >/dev/null || exit 1"]
       interval: 60s
@@ -212,7 +222,7 @@ services:
       - met-forecast-data:/swi/data/forecast:ro
     restart: always
     deploy:
-      replicas: ${SWI_SERVICE_REPLICAS:-3}
+      replicas: ${SWI_TITILER_REPLICAS:-3}
       update_config:
         order: start-first
         failure_action: rollback
@@ -220,27 +230,9 @@ services:
         limits:
           cpus: '4'
           memory: 4G
+    # Not exposed through Traefik: public traffic goes through titiler-cache below.
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.titiller.rule=Host(`${SWI_APIS_HOST?Variable not set}`)  && PathPrefix(`${SWI_TITILER_API_ROUTE?Variable not set}`)"
-      - "traefik.http.routers.titiller.entrypoints=websecure"
-      - "traefik.http.routers.titiller.tls=true"
-      - "traefik.http.services.titiller.loadbalancer.server.port=8085"
-      - "traefik.docker.network=dokploy-network"
-
-      # CORS middleware (titiller has no CORS handling of its own)
-      - "traefik.http.middlewares.titillercors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
-      - "traefik.http.middlewares.titillercors.headers.accesscontrolallowheaders=*"
-      - "traefik.http.middlewares.titillercors.headers.accesscontrolalloworiginlist=${CORS_ALLOWED_ORIGINS?Variable not set}"
-      - "traefik.http.middlewares.titillercors.headers.accesscontrolallowcredentials=true"
-
-      # Sticky Session
-      - "traefik.http.services.titiller.loadbalancer.sticky=true"
-
-      # Middleware
-      - "traefik.http.middlewares.titiller-stripprefix.stripprefix.prefixes=${SWI_TITILER_API_ROUTE?Variable not set}"
-
-      - "traefik.http.routers.titiller.middlewares=titiller-stripprefix,titillercors"
+      - "traefik.enable=false"
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf 'http://localhost:8085/health' >/dev/null || exit 1"]
       interval: 60s
@@ -249,6 +241,103 @@ services:
       start_period: 600s
     environment:
       - API_ROOT_PATH=${SWI_TITILER_API_ROUTE?Variable not set}
+    networks:
+      - internal
+
+  # Shared response cache in front of titiler (10 min TTL, successful GET/HEAD only).
+  # It is the only thing Traefik routes to for the titiler route, and the frontend's
+  # same-origin proxy (staging) talks to it directly over the internal network.
+  # The nginx config is written at start-up (same pattern as redis' ACL file) because
+  # Dokploy only deploys the compose file. `$$` is compose escaping for a literal `$`.
+  # Titiler runs several replicas behind the Swarm VIP, so nginx resolves it through
+  # Docker's embedded DNS at request time rather than once at start.
+  titiler-cache:
+    image: nginx:1.28-alpine
+    restart: unless-stopped
+    deploy:
+      replicas: 1
+      update_config:
+        order: start-first
+        failure_action: rollback
+    command:
+      - sh
+      - -c
+      - |
+        mkdir -p /var/cache/nginx/titiler && chown -R nginx:nginx /var/cache/nginx/titiler
+        cat > /etc/nginx/conf.d/default.conf <<'EOF'
+        proxy_cache_path /var/cache/nginx/titiler levels=1:2 keys_zone=titiler:50m max_size=2g inactive=1h use_temp_path=off;
+
+        # Titiler builds absolute URLs (TileJSON) from the request host/scheme, so keep
+        # Traefik's forwarded values when present and make them part of the cache key.
+        map $$http_x_forwarded_host $$swi_host { default $$http_x_forwarded_host; "" $$host; }
+        map $$http_x_forwarded_proto $$swi_proto { default $$http_x_forwarded_proto; "" $$scheme; }
+        # Liveness probes must always reach titiler, never a cached 200.
+        map $$uri $$swi_nocache { default 0; /health 1; }
+
+        server {
+          listen 80;
+          resolver 127.0.0.11 valid=10s ipv6=off;
+
+          location = /nginx-health { access_log off; default_type text/plain; return 200 "ok"; }
+
+          location / {
+            set $$upstream http://met-tilling-api:8085;
+            proxy_pass $$upstream;
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_set_header Host $$swi_host;
+            proxy_set_header X-Forwarded-Host $$swi_host;
+            proxy_set_header X-Forwarded-Proto $$swi_proto;
+            proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+            proxy_read_timeout 120s;
+
+            proxy_cache titiler;
+            proxy_cache_methods GET HEAD;
+            proxy_cache_key "$$swi_proto://$$swi_host$$request_uri";
+            proxy_cache_valid 200 10m;
+            proxy_ignore_headers Cache-Control Expires;
+            proxy_hide_header Cache-Control;
+            proxy_cache_bypass $$swi_nocache;
+            proxy_no_cache $$swi_nocache;
+            proxy_cache_lock on;
+            proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+            proxy_cache_background_update on;
+            add_header X-Cache-Status $$upstream_cache_status;
+            add_header Cache-Control "public, max-age=600";
+          }
+        }
+        EOF
+        exec nginx -g 'daemon off;'
+    volumes:
+      - titiler-cache:/var/cache/nginx/titiler
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.titiller.rule=Host(`${SWI_APIS_HOST?Variable not set}`)  && PathPrefix(`${SWI_TITILER_API_ROUTE?Variable not set}`)"
+      - "traefik.http.routers.titiller.entrypoints=websecure"
+      - "traefik.http.routers.titiller.tls=true"
+      - "traefik.http.routers.titiller.tls.certresolver=${TRAEFIK_CERT_RESOLVER-letsencrypt}"
+      - "traefik.http.services.titiller.loadbalancer.server.port=80"
+      - "traefik.docker.network=dokploy-network"
+
+      # CORS middleware (titiller has no CORS handling of its own). Applied by Traefik, after
+      # the cache, so cached bodies are shared between origins.
+      - "traefik.http.middlewares.titillercors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
+      - "traefik.http.middlewares.titillercors.headers.accesscontrolallowheaders=*"
+      - "traefik.http.middlewares.titillercors.headers.accesscontrolalloworiginlist=${CORS_ALLOWED_ORIGINS?Variable not set}"
+      - "traefik.http.middlewares.titillercors.headers.accesscontrolallowcredentials=true"
+
+      # Middleware
+      - "traefik.http.middlewares.titiller-stripprefix.stripprefix.prefixes=${SWI_TITILER_API_ROUTE?Variable not set}"
+
+      - "traefik.http.routers.titiller.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open},titiller-stripprefix,titillercors"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/nginx-health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      - met-tilling-api
     networks:
       - dokploy-network
       - internal
@@ -259,7 +348,7 @@ services:
   # TODO: add a monitoring/heartbeat ping once the cache run completes, matching the
   # SWI_SEAICE_MONITORING_ENDPOINT / SWI_AVALANCHE_MONITORING_ENDPOINT pattern above.
   CRON_metobs_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-metobs-caching:0.0.3
+    image: ghcr.io/unis-svalbard-weather-information/swi-metobs-caching:0.0.5
     labels:
       - "traefik.enable=false"
     volumes:
@@ -276,7 +365,7 @@ services:
   # via a Dokploy Schedule, same DOCKER_CRON stay-alive pattern as above.
   # TODO: add a monitoring/heartbeat ping once the cache run completes.
   CRON_AAforecast_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-aromearctic-caching:0.0.6
+    image: ghcr.io/unis-svalbard-weather-information/swi-aromearctic-caching:0.0.8
     labels:
       - "traefik.enable=false"
     volumes:
@@ -289,7 +378,7 @@ services:
   # ── elevation-service ───────────────────────────────────────────────────
 
   elevation_api:
-    image: ghcr.io/unis-svalbard-weather-information/swi-elevationapi:0.0.1
+    image: ghcr.io/unis-svalbard-weather-information/swi-elevationapi:0.0.4
     volumes:
       - elevation_data:/code/data
     restart: always
@@ -307,6 +396,7 @@ services:
       - "traefik.http.routers.oeapi.rule=Host(`${SWI_APIS_HOST?Variable not set}`)  && PathPrefix(`${SWI_ELEVATION_API_ROUTE?Variable not set}`)"
       - "traefik.http.routers.oeapi.entrypoints=websecure"
       - "traefik.http.routers.oeapi.tls=true"
+      - "traefik.http.routers.oeapi.tls.certresolver=${TRAEFIK_CERT_RESOLVER-letsencrypt}"
       - "traefik.http.services.oeapi.loadbalancer.server.port=8080"
       - "traefik.docker.network=dokploy-network"
 
@@ -334,7 +424,7 @@ services:
       - "traefik.http.middlewares.oeapistrip.headers.customresponseheaders.Access-Control-Allow-Headers="
 
       # Apply middlewares
-      - "traefik.http.routers.oeapi.middlewares=rewrite-oeapi,oeapicors,oeapistrip"
+      - "traefik.http.routers.oeapi.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open},rewrite-oeapi,oeapicors,oeapistrip"
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf 'http://127.0.0.1:8080/api/v1/lookup?locations=78.22,15.62' >/dev/null || exit 1"]
       interval: 60s
@@ -345,7 +435,72 @@ services:
       - dokploy-network
       - internal
 
+  # ── frontend ────────────────────────────────────────────────────────────
+  # Nuxt (Nitro/Node) app, configured purely through NUXT_* variables at runtime.
+  #   Production: direct mode - the browser calls the api./mapserver. hosts itself
+  #     (NUXT_PUBLIC_ENDPOINTS_* are absolute URLs, NUXT_BACKEND_* stay empty, and
+  #     CORS_ALLOWED_ORIGINS must contain this host).
+  #   Staging: same-origin proxy mode - NUXT_PUBLIC_ENDPOINTS_* are relative and
+  #     NUXT_BACKEND_* point at the internal service names, so one basic-auth login on
+  #     this host covers the whole app.
+  # This service also owns the two shared Traefik auth middlewares used by every router:
+  # swi-gate (basic auth, staging) and swi-open (no-op, production default).
+
+  frontend:
+    image: ghcr.io/unis-svalbard-weather-information/swi-frontend:2.0.0
+    restart: unless-stopped
+    deploy:
+      replicas: ${SWI_FRONTEND_REPLICAS:-1}
+      update_config:
+        order: start-first
+        failure_action: rollback
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`${SWI_FRONTEND_HOST?Variable not set}`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls=true"
+      - "traefik.http.routers.frontend.tls.certresolver=${TRAEFIK_CERT_RESOLVER-letsencrypt}"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+      - "traefik.docker.network=dokploy-network"
+
+      # Auth gate shared by all routers. SWI_BASICAUTH_USERS is an htpasswd line list
+      # (comma separated); the default is an unusable placeholder so that selecting
+      # swi-gate without users fails closed instead of open. Unused when swi-open is active.
+      - "traefik.http.middlewares.swi-gate.basicauth.users=${SWI_BASICAUTH_USERS:-swi:$$apr1$$invalid$$invalidinvalidinvalid.}"
+      - "traefik.http.middlewares.swi-gate.basicauth.removeheader=true"
+      - "traefik.http.middlewares.swi-open.headers.customrequestheaders.X-Swi-Gate=open"
+
+      - "traefik.http.routers.frontend.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open}"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    environment:
+      - NUXT_PUBLIC_ENDPOINTS_API_METOBS=${NUXT_PUBLIC_ENDPOINTS_API_METOBS?Variable not set}
+      - NUXT_PUBLIC_ENDPOINTS_API_TILES=${NUXT_PUBLIC_ENDPOINTS_API_TILES?Variable not set}
+      - NUXT_PUBLIC_ENDPOINTS_API_ELEVATION=${NUXT_PUBLIC_ENDPOINTS_API_ELEVATION?Variable not set}
+      - NUXT_PUBLIC_ENDPOINTS_MAPSERVERS_MAPPROXY=${NUXT_PUBLIC_ENDPOINTS_MAPSERVERS_MAPPROXY?Variable not set}
+      - NUXT_BACKEND_METOBS=${NUXT_BACKEND_METOBS:-}
+      - NUXT_BACKEND_TILES=${NUXT_BACKEND_TILES:-}
+      - NUXT_BACKEND_ELEVATION=${NUXT_BACKEND_ELEVATION:-}
+      - NUXT_BACKEND_MAPPROXY=${NUXT_BACKEND_MAPPROXY:-}
+      - NUXT_PUBLIC_FEATURES_MOCK_API=false
+      - NUXT_PUBLIC_MAP_DEFAULT_OPACITY=${NUXT_PUBLIC_MAP_DEFAULT_OPACITY:-100}
+      - NUXT_PUBLIC_MAP_DEFAULT_LOCATION_X=${NUXT_PUBLIC_MAP_DEFAULT_LOCATION_X:-78.2}
+      - NUXT_PUBLIC_MAP_DEFAULT_LOCATION_Y=${NUXT_PUBLIC_MAP_DEFAULT_LOCATION_Y:-15.6}
+    networks:
+      - dokploy-network
+      - internal
+
 volumes:
+  titiler-cache:
+
   tiles-cache:
 
   map-data:
