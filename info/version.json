@@ -35,6 +35,10 @@
     "swi-elevationapi": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-elevationapi",
       "version": "0.0.4"
+    },
+    "swi-frontend": {
+      "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-frontend",
+      "version": "2.0.0"
     }
   }
 }

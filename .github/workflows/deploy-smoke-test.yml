@@ -75,8 +75,17 @@ jobs:
           SWI_TITILER_REPLICAS=1
           SWI_METOBS_REPLICAS=1
           SWI_REDIS_PWD=smoke-test-password
+          SWI_FRONTEND_HOST=portal.localhost
           SWI_MAPPROXY_HOST=mapserver.localhost
           SWI_APIS_HOST=api.localhost
+          NUXT_PUBLIC_ENDPOINTS_API_METOBS=/api/v3
+          NUXT_PUBLIC_ENDPOINTS_API_TILES=/tiles
+          NUXT_PUBLIC_ENDPOINTS_API_ELEVATION=/oeapi/v1
+          NUXT_PUBLIC_ENDPOINTS_MAPSERVERS_MAPPROXY=/mapserver
+          NUXT_BACKEND_METOBS=http://met-public-api:8085/v3
+          NUXT_BACKEND_TILES=http://titiler-cache
+          NUXT_BACKEND_ELEVATION=http://elevation_api:8080/api
+          NUXT_BACKEND_MAPPROXY=http://mapproxy-server:8080
           SWI_METOBS_API_ROUTE=/public/
           SWI_METOBS_INTERNAL_PORT=8085
           SWI_TITILER_API_ROUTE=/tiles/
@@ -92,7 +101,7 @@ jobs:
 
       - name: Resolve *.localhost hostnames explicitly
         run: |
-          echo "127.0.0.1 mapserver.localhost api.localhost dashboard.docker.localhost" | sudo tee -a /etc/hosts
+          echo "127.0.0.1 mapserver.localhost api.localhost portal.localhost dashboard.docker.localhost" | sudo tee -a /etc/hosts
 
       - name: Create external network (Dokploy provides this in production)
         run: docker network create dokploy-network
@@ -111,7 +120,7 @@ jobs:
         # Cron containers excluded: they need real upstream API keys to fetch live data
         # and aren't part of the "does the stack come up healthy and route correctly"
         # question this gate asks.
-        run: docker compose -f compose.yml up -d redis mapproxy-server met-public-api met-tilling-api titiler-cache elevation_api
+        run: docker compose -f compose.yml up -d redis mapproxy-server met-public-api met-tilling-api titiler-cache elevation_api frontend
 
       - name: Wait for services to report healthy
         # Iterates every container per service, not just one: `docker compose ps -q`
@@ -124,7 +133,7 @@ jobs:
         run: |
           timeout=300
           elapsed=0
-          services="mapproxy-server met-public-api met-tilling-api titiler-cache elevation_api"
+          services="mapproxy-server met-public-api met-tilling-api titiler-cache elevation_api frontend"
           while true; do
             unhealthy=""
             for s in $services; do
@@ -180,16 +189,23 @@ jobs:
             check_blocked "$1" "$2"
           done
 
-      - name: Titiler cache check
-        # The titiler route must be served through the nginx cache: the second identical
-        # request has to be a HIT.
+      - name: Frontend and titiler cache check
+        # The frontend must answer on its own host, and the titiler route must be served
+        # through the nginx cache: the second identical request has to be a HIT.
         run: |
           set -e
+          code=$(curl -k -s -o /dev/null -w '%{http_code}' https://portal.localhost/)
+          [ "$code" = "200" ] || { echo "FAIL: frontend returned $code"; exit 1; }
+          echo "OK: frontend answers 200"
           url=https://api.localhost/tiles/openapi.json
           curl -k -s -o /dev/null "$url"
           status=$(curl -k -s -D - -o /dev/null "$url" | tr -d '\r' | grep -i '^x-cache-status:' | awk '{print $2}')
           [ "$status" = "HIT" ] || { echo "FAIL: second titiler request was '$status', expected HIT"; exit 1; }
           echo "OK: titiler response served from cache (HIT)"
+          # Through the frontend's same-origin proxy it must hit the same cache.
+          status=$(curl -k -s -D - -o /dev/null https://portal.localhost/tiles/openapi.json | tr -d '\r' | grep -i '^x-cache-status:' | awk '{print $2}')
+          [ "$status" = "HIT" ] || { echo "FAIL: frontend /tiles proxy was '$status', expected HIT"; exit 1; }
+          echo "OK: frontend /tiles proxy reaches the cache (HIT)"
 
       - name: Tear down
         if: always()

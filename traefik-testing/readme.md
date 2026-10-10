@@ -46,7 +46,7 @@ hash already in `compose.yml` — a local-only convenience credential, not a rea
 ```bash
 cp .env.example .env
 # Then edit .env: set SWI_MAPPROXY_REPLICAS, SWI_TITILER_REPLICAS and SWI_METOBS_REPLICAS
-# to 1 (see the root README's "Run it locally")
+# to 1 (see the root README's "Run it locally"), and add portal.localhost to your hosts file
 # so this starts 1 container per service instead of production's 3 - everything else in
 # .env.example already defaults to *.localhost hosts, fine as-is for local testing.
 docker compose -f compose.yml up -d

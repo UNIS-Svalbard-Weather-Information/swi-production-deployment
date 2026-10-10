@@ -38,7 +38,7 @@ services on a laptop is unnecessary weight for a dev loop.
 ```bash
 # 4. Bring the stack up (cron containers excluded - they need real upstream API keys,
 #    see API_KEYS.md if you want to run those too)
-docker compose -f compose.yml up -d redis mapproxy-server met-public-api met-tilling-api titiler-cache elevation_api
+docker compose -f compose.yml up -d redis mapproxy-server met-public-api met-tilling-api titiler-cache elevation_api frontend
 
 # Give services a minute to pass their start_period healthchecks
 docker compose ps
@@ -82,6 +82,7 @@ docker network rm dokploy-network
 | map-service | `mapproxy-server`, `CRON_seaice_cache`, `CRON_avalanche_cache` | `swi-mapproxy`, `swi-mapcache-seaice`, `swi-avalanche-caching` |
 | met-service | `met-public-api`, `met-tilling-api`, `CRON_metobs_cache`, `CRON_AAforecast_cache` | `swi-metobs-backend`, `swi-titiller`, `swi-metobs-caching`, `swi-aromearctic-caching` |
 | elevation-service | `elevation_api` | `swi-elevationapi` |
+| frontend | `frontend` | `swi-frontend` |
 
 Plus a shared `redis` used by both mapproxy (tile cache) and met-public-api (response
 cache). Routing and CORS are handled by Traefik via Docker labels (Dokploy runs Traefik on
@@ -90,9 +91,9 @@ the `dokploy-network` external network) - see the CORS note above for the one ex
 `mapproxy-server`, `met-public-api`, and `met-tilling-api` read their replica count from
 `SWI_MAPPROXY_REPLICAS`, `SWI_METOBS_REPLICAS` and `SWI_TITILER_REPLICAS` respectively
 (each defaults to `3`, production's value - leave them unset in the production Dokploy
-project). `elevation_api` always runs 1 - it's already minimal in both environments,
-nothing to override. These replace the former single `SWI_SERVICE_REPLICAS`, which is no
-longer read.
+project). `frontend` defaults to 1 (`SWI_FRONTEND_REPLICAS`). `elevation_api` always runs
+1 - it's already minimal in both environments, nothing to override. These replace the
+former single `SWI_SERVICE_REPLICAS`, which is no longer read.
 
 ### Titiler cache
 

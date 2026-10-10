@@ -423,6 +423,57 @@ services:
       - dokploy-network
       - internal
 
+  # ── frontend ────────────────────────────────────────────────────────────
+  # Nuxt (Nitro/Node) app, configured purely through NUXT_* variables at runtime.
+  #   Production: direct mode - the browser calls the api./mapserver. hosts itself
+  #     (NUXT_PUBLIC_ENDPOINTS_* are absolute URLs, NUXT_BACKEND_* stay empty, and
+  #     CORS_ALLOWED_ORIGINS must contain this host).
+  #   Staging: same-origin proxy mode - NUXT_PUBLIC_ENDPOINTS_* are relative and
+  #     NUXT_BACKEND_* point at the internal service names, so one basic-auth login on
+  #     this host covers the whole app.
+
+  frontend:
+    image: ghcr.io/unis-svalbard-weather-information/swi-frontend:2.0.0
+    restart: unless-stopped
+    deploy:
+      replicas: ${SWI_FRONTEND_REPLICAS:-1}
+      update_config:
+        order: start-first
+        failure_action: rollback
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`${SWI_FRONTEND_HOST?Variable not set}`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls=true"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+      - "traefik.docker.network=dokploy-network"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    environment:
+      - NUXT_PUBLIC_ENDPOINTS_API_METOBS=${NUXT_PUBLIC_ENDPOINTS_API_METOBS?Variable not set}
+      - NUXT_PUBLIC_ENDPOINTS_API_TILES=${NUXT_PUBLIC_ENDPOINTS_API_TILES?Variable not set}
+      - NUXT_PUBLIC_ENDPOINTS_API_ELEVATION=${NUXT_PUBLIC_ENDPOINTS_API_ELEVATION?Variable not set}
+      - NUXT_PUBLIC_ENDPOINTS_MAPSERVERS_MAPPROXY=${NUXT_PUBLIC_ENDPOINTS_MAPSERVERS_MAPPROXY?Variable not set}
+      - NUXT_BACKEND_METOBS=${NUXT_BACKEND_METOBS:-}
+      - NUXT_BACKEND_TILES=${NUXT_BACKEND_TILES:-}
+      - NUXT_BACKEND_ELEVATION=${NUXT_BACKEND_ELEVATION:-}
+      - NUXT_BACKEND_MAPPROXY=${NUXT_BACKEND_MAPPROXY:-}
+      - NUXT_PUBLIC_FEATURES_MOCK_API=false
+      - NUXT_PUBLIC_MAP_DEFAULT_OPACITY=${NUXT_PUBLIC_MAP_DEFAULT_OPACITY:-100}
+      - NUXT_PUBLIC_MAP_DEFAULT_LOCATION_X=${NUXT_PUBLIC_MAP_DEFAULT_LOCATION_X:-78.2}
+      - NUXT_PUBLIC_MAP_DEFAULT_LOCATION_Y=${NUXT_PUBLIC_MAP_DEFAULT_LOCATION_Y:-15.6}
+    networks:
+      - dokploy-network
+      - internal
+
 volumes:
   titiler-cache:
 
