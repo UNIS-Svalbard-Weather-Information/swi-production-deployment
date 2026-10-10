@@ -77,6 +77,7 @@ jobs:
           SWI_METOBS_REPLICAS=1
           SWI_REDIS_PWD=smoke-test-password
           SWI_FRONTEND_HOST=portal.localhost
+          TRAEFIK_CERT_RESOLVER=
           SWI_MAPPROXY_HOST=mapserver.localhost
           SWI_APIS_HOST=api.localhost
           NUXT_PUBLIC_ENDPOINTS_API_METOBS=/api/v3
