@@ -10,6 +10,14 @@ name: SW-SWI-SRM-Services
 # application level (FastAPI CORSMiddleware, driven by its own CORS_ALLOWED_ORIGINS env
 # var) so it intentionally does NOT also get a Traefik CORS middleware here — stacking
 # both would produce duplicate/conflicting Access-Control-Allow-Origin headers.
+#
+# Staging vs production is decided purely by environment variables (same file on both):
+#   - SWI_AUTH_MIDDLEWARE=swi-gate (+ SWI_BASICAUTH_USERS) puts HTTP basic auth in front of
+#     every public router. Unset (production) it falls back to the no-op swi-open.
+#   - SWI_{MAPPROXY,TITILER,METOBS,FRONTEND}_REPLICAS set the replica counts.
+#   - NUXT_* configure the frontend (direct mode in production, same-origin proxy mode on
+#     staging so a single basic-auth login covers the whole app). See .env.example.
+# Titiler is only reachable through titiler-cache (nginx, 10 min TTL), never directly.
 
 services:
 
@@ -88,7 +96,7 @@ services:
       - "traefik.http.middlewares.mapproxyheaders.headers.customresponseheaders.Access-Control-Allow-Origin="
 
       # Apply middlewares
-      - "traefik.http.routers.mapproxy-server.middlewares=mapproxycors,mapproxyheaders"
+      - "traefik.http.routers.mapproxy-server.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open},mapproxycors,mapproxyheaders"
 
       # Sticky Session
       - "traefik.http.services.mapproxy-server.loadbalancer.sticky=true"
@@ -183,7 +191,7 @@ services:
       # Middleware
       - "traefik.http.middlewares.metobs-stripprefix.stripprefix.prefixes=${SWI_METOBS_API_ROUTE?Variable not set}"
 
-      - "traefik.http.routers.metobs.middlewares=metobs-stripprefix"
+      - "traefik.http.routers.metobs.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open},metobs-stripprefix"
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf 'http://127.0.0.1:${SWI_METOBS_INTERNAL_PORT:-8085}/health' >/dev/null || exit 1"]
       interval: 60s
@@ -318,7 +326,7 @@ services:
       # Middleware
       - "traefik.http.middlewares.titiller-stripprefix.stripprefix.prefixes=${SWI_TITILER_API_ROUTE?Variable not set}"
 
-      - "traefik.http.routers.titiller.middlewares=titiller-stripprefix,titillercors"
+      - "traefik.http.routers.titiller.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open},titiller-stripprefix,titillercors"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/nginx-health || exit 1"]
       interval: 30s
@@ -412,7 +420,7 @@ services:
       - "traefik.http.middlewares.oeapistrip.headers.customresponseheaders.Access-Control-Allow-Headers="
 
       # Apply middlewares
-      - "traefik.http.routers.oeapi.middlewares=rewrite-oeapi,oeapicors,oeapistrip"
+      - "traefik.http.routers.oeapi.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open},rewrite-oeapi,oeapicors,oeapistrip"
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf 'http://127.0.0.1:8080/api/v1/lookup?locations=78.22,15.62' >/dev/null || exit 1"]
       interval: 60s
@@ -431,6 +439,8 @@ services:
   #   Staging: same-origin proxy mode - NUXT_PUBLIC_ENDPOINTS_* are relative and
   #     NUXT_BACKEND_* point at the internal service names, so one basic-auth login on
   #     this host covers the whole app.
+  # This service also owns the two shared Traefik auth middlewares used by every router:
+  # swi-gate (basic auth, staging) and swi-open (no-op, production default).
 
   frontend:
     image: ghcr.io/unis-svalbard-weather-information/swi-frontend:2.0.0
@@ -451,6 +461,15 @@ services:
       - "traefik.http.routers.frontend.tls=true"
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
       - "traefik.docker.network=dokploy-network"
+
+      # Auth gate shared by all routers. SWI_BASICAUTH_USERS is an htpasswd line list
+      # (comma separated); the default is an unusable placeholder so that selecting
+      # swi-gate without users fails closed instead of open. Unused when swi-open is active.
+      - "traefik.http.middlewares.swi-gate.basicauth.users=${SWI_BASICAUTH_USERS:-swi:$$apr1$$invalid$$invalidinvalidinvalid.}"
+      - "traefik.http.middlewares.swi-gate.basicauth.removeheader=true"
+      - "traefik.http.middlewares.swi-open.headers.customrequestheaders.X-Swi-Gate=open"
+
+      - "traefik.http.routers.frontend.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open}"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1"]
       interval: 30s

@@ -95,6 +95,22 @@ project). `frontend` defaults to 1 (`SWI_FRONTEND_REPLICAS`). `elevation_api` al
 1 - it's already minimal in both environments, nothing to override. These replace the
 former single `SWI_SERVICE_REPLICAS`, which is no longer read.
 
+### Staging vs production
+
+Both environments deploy this same `compose.yml`; the Dokploy environment variables make
+the difference.
+
+| | Production | Staging |
+|---|---|---|
+| Replicas | defaults (3 / 3 / 3) | `SWI_MAPPROXY_REPLICAS=1`, `SWI_TITILER_REPLICAS=1` (metobs stays 3) |
+| Password | none (`SWI_AUTH_MIDDLEWARE` unset, no-op `swi-open`) | `SWI_AUTH_MIDDLEWARE=swi-gate` + `SWI_BASICAUTH_USERS` (HTTP basic auth on every public router) |
+| Frontend mode | **direct**: `NUXT_PUBLIC_ENDPOINTS_*` are absolute `https://api.…` / `https://mapserver.…` URLs, `NUXT_BACKEND_*` unset, `CORS_ALLOWED_ORIGINS` includes `https://<SWI_FRONTEND_HOST>` | **same-origin proxy**: `NUXT_PUBLIC_ENDPOINTS_*` relative, `NUXT_BACKEND_*` = internal service URLs (see `.env.example`) |
+
+Staging must use proxy mode: browsers don't send basic-auth credentials on cross-origin
+requests and CORS preflights never carry them, so a password on the API hosts would break
+the app in direct mode. In proxy mode the browser only talks to the frontend host, so one
+login covers everything (the API/mapserver hosts stay password-protected too).
+
 ### Titiler cache
 
 `met-tilling-api` is no longer routed by Traefik. The `titiler-cache` service (nginx)

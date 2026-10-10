@@ -207,6 +207,27 @@ jobs:
           [ "$status" = "HIT" ] || { echo "FAIL: frontend /tiles proxy was '$status', expected HIT"; exit 1; }
           echo "OK: frontend /tiles proxy reaches the cache (HIT)"
 
+      - name: Staging auth check
+        # Re-deploys the Traefik-labelled services with the staging gate switched on and
+        # asserts every public host demands the password (and accepts it). Runs after the
+        # CORS check on purpose: with auth on, unauthenticated CORS probes would just see 401.
+        run: |
+          set -e
+          hash=$(openssl passwd -apr1 smoke-pass)
+          {
+            echo "SWI_AUTH_MIDDLEWARE=swi-gate"
+            echo "SWI_BASICAUTH_USERS='smoke:${hash}'"
+          } >> .env
+          docker compose -f compose.yml up -d frontend mapproxy-server met-public-api titiler-cache elevation_api
+          sleep 20
+          for url in https://portal.localhost/ https://mapserver.localhost/ https://api.localhost/tiles/openapi.json https://api.localhost/public/ https://api.localhost/oeapi/; do
+            anon=$(curl -k -s -o /dev/null -w '%{http_code}' "$url")
+            [ "$anon" = "401" ] || { echo "FAIL: $url returned $anon without credentials, expected 401"; exit 1; }
+            authed=$(curl -k -s -o /dev/null -w '%{http_code}' -u smoke:smoke-pass "$url")
+            [ "$authed" != "401" ] || { echo "FAIL: $url rejected valid credentials"; exit 1; }
+            echo "OK: $url -> 401 anonymous, $authed with credentials"
+          done
+
       - name: Tear down
         if: always()
         run: |
