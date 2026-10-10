@@ -70,6 +70,7 @@ services:
       - "traefik.http.routers.mapproxy-server.rule=Host(`${SWI_MAPPROXY_HOST?Variable not set}`)"
       - "traefik.http.routers.mapproxy-server.entrypoints=websecure"
       - "traefik.http.routers.mapproxy-server.tls=true"
+      - "traefik.http.routers.mapproxy-server.tls.certresolver=${TRAEFIK_CERT_RESOLVER-letsencrypt}"
       - "traefik.http.services.mapproxy-server.loadbalancer.server.port=8080"
       - "traefik.docker.network=dokploy-network"
 
@@ -182,6 +183,7 @@ services:
       - "traefik.http.routers.metobs.rule=Host(`${SWI_APIS_HOST?Variable not set}`)  && PathPrefix(`${SWI_METOBS_API_ROUTE?Variable not set}`)"
       - "traefik.http.routers.metobs.entrypoints=websecure"
       - "traefik.http.routers.metobs.tls=true"
+      - "traefik.http.routers.metobs.tls.certresolver=${TRAEFIK_CERT_RESOLVER-letsencrypt}"
       - "traefik.http.services.metobs.loadbalancer.server.port=${SWI_METOBS_INTERNAL_PORT:-8085}"
       - "traefik.docker.network=dokploy-network"
 
@@ -313,6 +315,7 @@ services:
       - "traefik.http.routers.titiller.rule=Host(`${SWI_APIS_HOST?Variable not set}`)  && PathPrefix(`${SWI_TITILER_API_ROUTE?Variable not set}`)"
       - "traefik.http.routers.titiller.entrypoints=websecure"
       - "traefik.http.routers.titiller.tls=true"
+      - "traefik.http.routers.titiller.tls.certresolver=${TRAEFIK_CERT_RESOLVER-letsencrypt}"
       - "traefik.http.services.titiller.loadbalancer.server.port=80"
       - "traefik.docker.network=dokploy-network"
 
@@ -393,6 +396,7 @@ services:
       - "traefik.http.routers.oeapi.rule=Host(`${SWI_APIS_HOST?Variable not set}`)  && PathPrefix(`${SWI_ELEVATION_API_ROUTE?Variable not set}`)"
       - "traefik.http.routers.oeapi.entrypoints=websecure"
       - "traefik.http.routers.oeapi.tls=true"
+      - "traefik.http.routers.oeapi.tls.certresolver=${TRAEFIK_CERT_RESOLVER-letsencrypt}"
       - "traefik.http.services.oeapi.loadbalancer.server.port=8080"
       - "traefik.docker.network=dokploy-network"
 
@@ -459,6 +463,7 @@ services:
       - "traefik.http.routers.frontend.rule=Host(`${SWI_FRONTEND_HOST?Variable not set}`)"
       - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.routers.frontend.tls=true"
+      - "traefik.http.routers.frontend.tls.certresolver=${TRAEFIK_CERT_RESOLVER-letsencrypt}"
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
       - "traefik.docker.network=dokploy-network"
 
