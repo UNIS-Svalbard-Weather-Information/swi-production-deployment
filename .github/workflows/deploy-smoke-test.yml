@@ -33,6 +33,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      packages: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -115,6 +116,13 @@ jobs:
 
       - name: Start Traefik
         run: docker compose -f traefik-testing/compose.yml up -d
+
+      - name: Log in to GHCR
+        # swi-frontend is a private package for now. Its "Manage Actions access" setting
+        # must grant this repository read access, otherwise the pull below fails with
+        # "unauthorized". Harmless for the public images. Not available to forked PRs
+        # (no token), where the stack pull would fail the same way.
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Bring the stack up
         # Cron containers excluded: they need real upstream API keys to fetch live data
