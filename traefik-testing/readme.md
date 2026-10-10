@@ -45,7 +45,8 @@ hash already in `compose.yml` — a local-only convenience credential, not a rea
 
 ```bash
 cp .env.example .env
-# Then edit .env: set SWI_SERVICE_REPLICAS=1 (see the root README's "Run it locally")
+# Then edit .env: set SWI_MAPPROXY_REPLICAS, SWI_TITILER_REPLICAS and SWI_METOBS_REPLICAS
+# to 1 (see the root README's "Run it locally"), and add portal.localhost to your hosts file
 # so this starts 1 container per service instead of production's 3 - everything else in
 # .env.example already defaults to *.localhost hosts, fine as-is for local testing.
 docker compose -f compose.yml up -d
@@ -53,8 +54,8 @@ docker compose -f compose.yml up -d
 
 Note: modern Docker Compose (verified with 29.3.1) honors `deploy.replicas` even outside
 Swarm mode — bringing this up with plain `docker compose up` really does start
-`SWI_SERVICE_REPLICAS` copies of mapproxy-server/met-public-api/met-tilling-api (3 if you
-didn't override it). It does *not* honor `update_config` (the `start-first` rolling-update
+`SWI_MAPPROXY_REPLICAS` / `SWI_METOBS_REPLICAS` / `SWI_TITILER_REPLICAS` copies of
+mapproxy-server/met-public-api/met-tilling-api (3 each if you didn't override them). It does *not* honor `update_config` (the `start-first` rolling-update
 behavior), since that's a Swarm scheduler feature with no plain-Compose equivalent. To
 exercise the actual rolling-update behavior, initialize a local single-node Swarm instead
 (`docker swarm init`) and deploy with `docker stack deploy -c compose.yml swi`.

@@ -30,14 +30,15 @@ cp .env.example .env
 ```
 
 Now edit `.env`: everything already defaults to `*.localhost` hosts, fine as-is for local
-testing, but set **`SWI_SERVICE_REPLICAS=1`** - the example file defaults to `3` (production's
-value) since it's meant to double as a template for real deployment, and running 9
-containers for 3 services on a laptop is unnecessary weight for a dev loop.
+testing, but set **`SWI_MAPPROXY_REPLICAS=1`, `SWI_TITILER_REPLICAS=1` and
+`SWI_METOBS_REPLICAS=1`** - the example file defaults to `3` (production's value) since
+it's meant to double as a template for real deployment, and running 9 containers for 3
+services on a laptop is unnecessary weight for a dev loop.
 
 ```bash
 # 4. Bring the stack up (cron containers excluded - they need real upstream API keys,
 #    see API_KEYS.md if you want to run those too)
-docker compose -f compose.yml up -d redis mapproxy-server met-public-api met-tilling-api elevation_api
+docker compose -f compose.yml up -d redis mapproxy-server met-public-api met-tilling-api titiler-cache elevation_api frontend
 
 # Give services a minute to pass their start_period healthchecks
 docker compose ps
@@ -81,15 +82,43 @@ docker network rm dokploy-network
 | map-service | `mapproxy-server`, `CRON_seaice_cache`, `CRON_avalanche_cache` | `swi-mapproxy`, `swi-mapcache-seaice`, `swi-avalanche-caching` |
 | met-service | `met-public-api`, `met-tilling-api`, `CRON_metobs_cache`, `CRON_AAforecast_cache` | `swi-metobs-backend`, `swi-titiller`, `swi-metobs-caching`, `swi-aromearctic-caching` |
 | elevation-service | `elevation_api` | `swi-elevationapi` |
+| frontend | `frontend` | `swi-frontend` |
 
 Plus a shared `redis` used by both mapproxy (tile cache) and met-public-api (response
 cache). Routing and CORS are handled by Traefik via Docker labels (Dokploy runs Traefik on
 the `dokploy-network` external network) - see the CORS note above for the one exception.
 
 `mapproxy-server`, `met-public-api`, and `met-tilling-api` read their replica count from
-`SWI_SERVICE_REPLICAS` (default `3`, production's value - unset in Dokploy, it behaves
-exactly as before this variable existed). `elevation_api` always runs 1 - it's already
-minimal in both environments, nothing to override.
+`SWI_MAPPROXY_REPLICAS`, `SWI_METOBS_REPLICAS` and `SWI_TITILER_REPLICAS` respectively
+(each defaults to `3`, production's value - leave them unset in the production Dokploy
+project). `frontend` defaults to 1 (`SWI_FRONTEND_REPLICAS`). `elevation_api` always runs
+1 - it's already minimal in both environments, nothing to override. These replace the
+former single `SWI_SERVICE_REPLICAS`, which is no longer read.
+
+### Staging vs production
+
+Both environments deploy this same `compose.yml`; the Dokploy environment variables make
+the difference.
+
+| | Production | Staging |
+|---|---|---|
+| Replicas | defaults (3 / 3 / 3) | `SWI_MAPPROXY_REPLICAS=1`, `SWI_TITILER_REPLICAS=1` (metobs stays 3) |
+| Password | none (`SWI_AUTH_MIDDLEWARE` unset, no-op `swi-open`) | `SWI_AUTH_MIDDLEWARE=swi-gate` + `SWI_BASICAUTH_USERS` (HTTP basic auth on every public router) |
+| Frontend mode | **direct**: `NUXT_PUBLIC_ENDPOINTS_*` are absolute `https://api.…` / `https://mapserver.…` URLs, `NUXT_BACKEND_*` unset, `CORS_ALLOWED_ORIGINS` includes `https://<SWI_FRONTEND_HOST>` | **same-origin proxy**: `NUXT_PUBLIC_ENDPOINTS_*` relative, `NUXT_BACKEND_*` = internal service URLs (see `.env.example`) |
+
+Staging must use proxy mode: browsers don't send basic-auth credentials on cross-origin
+requests and CORS preflights never carry them, so a password on the API hosts would break
+the app in direct mode. In proxy mode the browser only talks to the frontend host, so one
+login covers everything (the API/mapserver hosts stay password-protected too).
+
+### Titiler cache
+
+`met-tilling-api` is no longer routed by Traefik. The `titiler-cache` service (nginx)
+sits in front of it: successful `GET`/`HEAD` responses are cached for 10 minutes (stale
+copies are served on errors or while refreshing, `/health` is never cached, and every
+response carries `X-Cache-Status: HIT|MISS|BYPASS|STALE`). The cache is shared by the
+public `/tiles/` route and the staging frontend proxy, lives in the `titiler-cache`
+volume (max 2 GB), and CORS is still added by Traefik after it.
 
 Two repos feed config into running containers at boot rather than build time —
 `swi-mapproxy-configuration` (mapproxy.yaml) and `swi-metobs-station-configuration`
