@@ -111,7 +111,7 @@ jobs:
         # Cron containers excluded: they need real upstream API keys to fetch live data
         # and aren't part of the "does the stack come up healthy and route correctly"
         # question this gate asks.
-        run: docker compose -f compose.yml up -d redis mapproxy-server met-public-api met-tilling-api elevation_api
+        run: docker compose -f compose.yml up -d redis mapproxy-server met-public-api met-tilling-api titiler-cache elevation_api
 
       - name: Wait for services to report healthy
         # Iterates every container per service, not just one: `docker compose ps -q`
@@ -124,7 +124,7 @@ jobs:
         run: |
           timeout=300
           elapsed=0
-          services="mapproxy-server met-public-api met-tilling-api elevation_api"
+          services="mapproxy-server met-public-api met-tilling-api titiler-cache elevation_api"
           while true; do
             unhealthy=""
             for s in $services; do
@@ -179,6 +179,17 @@ jobs:
             check_allowed "$1" "$2" "https://staging.svalbardwatch.example.com"
             check_blocked "$1" "$2"
           done
+
+      - name: Titiler cache check
+        # The titiler route must be served through the nginx cache: the second identical
+        # request has to be a HIT.
+        run: |
+          set -e
+          url=https://api.localhost/tiles/openapi.json
+          curl -k -s -o /dev/null "$url"
+          status=$(curl -k -s -D - -o /dev/null "$url" | tr -d '\r' | grep -i '^x-cache-status:' | awk '{print $2}')
+          [ "$status" = "HIT" ] || { echo "FAIL: second titiler request was '$status', expected HIT"; exit 1; }
+          echo "OK: titiler response served from cache (HIT)"
 
       - name: Tear down
         if: always()

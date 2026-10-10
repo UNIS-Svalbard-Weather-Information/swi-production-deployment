@@ -38,7 +38,7 @@ services on a laptop is unnecessary weight for a dev loop.
 ```bash
 # 4. Bring the stack up (cron containers excluded - they need real upstream API keys,
 #    see API_KEYS.md if you want to run those too)
-docker compose -f compose.yml up -d redis mapproxy-server met-public-api met-tilling-api elevation_api
+docker compose -f compose.yml up -d redis mapproxy-server met-public-api met-tilling-api titiler-cache elevation_api
 
 # Give services a minute to pass their start_period healthchecks
 docker compose ps
@@ -93,6 +93,15 @@ the `dokploy-network` external network) - see the CORS note above for the one ex
 project). `elevation_api` always runs 1 - it's already minimal in both environments,
 nothing to override. These replace the former single `SWI_SERVICE_REPLICAS`, which is no
 longer read.
+
+### Titiler cache
+
+`met-tilling-api` is no longer routed by Traefik. The `titiler-cache` service (nginx)
+sits in front of it: successful `GET`/`HEAD` responses are cached for 10 minutes (stale
+copies are served on errors or while refreshing, `/health` is never cached, and every
+response carries `X-Cache-Status: HIT|MISS|BYPASS|STALE`). The cache is shared by the
+public `/tiles/` route and the staging frontend proxy, lives in the `titiler-cache`
+volume (max 2 GB), and CORS is still added by Traefik after it.
 
 Two repos feed config into running containers at boot rather than build time —
 `swi-mapproxy-configuration` (mapproxy.yaml) and `swi-metobs-station-configuration`
