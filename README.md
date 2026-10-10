@@ -30,9 +30,10 @@ cp .env.example .env
 ```
 
 Now edit `.env`: everything already defaults to `*.localhost` hosts, fine as-is for local
-testing, but set **`SWI_SERVICE_REPLICAS=1`** - the example file defaults to `3` (production's
-value) since it's meant to double as a template for real deployment, and running 9
-containers for 3 services on a laptop is unnecessary weight for a dev loop.
+testing, but set **`SWI_MAPPROXY_REPLICAS=1`, `SWI_TITILER_REPLICAS=1` and
+`SWI_METOBS_REPLICAS=1`** - the example file defaults to `3` (production's value) since
+it's meant to double as a template for real deployment, and running 9 containers for 3
+services on a laptop is unnecessary weight for a dev loop.
 
 ```bash
 # 4. Bring the stack up (cron containers excluded - they need real upstream API keys,
@@ -87,9 +88,11 @@ cache). Routing and CORS are handled by Traefik via Docker labels (Dokploy runs 
 the `dokploy-network` external network) - see the CORS note above for the one exception.
 
 `mapproxy-server`, `met-public-api`, and `met-tilling-api` read their replica count from
-`SWI_SERVICE_REPLICAS` (default `3`, production's value - unset in Dokploy, it behaves
-exactly as before this variable existed). `elevation_api` always runs 1 - it's already
-minimal in both environments, nothing to override.
+`SWI_MAPPROXY_REPLICAS`, `SWI_METOBS_REPLICAS` and `SWI_TITILER_REPLICAS` respectively
+(each defaults to `3`, production's value - leave them unset in the production Dokploy
+project). `elevation_api` always runs 1 - it's already minimal in both environments,
+nothing to override. These replace the former single `SWI_SERVICE_REPLICAS`, which is no
+longer read.
 
 Two repos feed config into running containers at boot rather than build time —
 `swi-mapproxy-configuration` (mapproxy.yaml) and `swi-metobs-station-configuration`
