@@ -71,10 +71,21 @@ jobs:
         run: |
           cat > .env <<'EOF'
           CORS_ALLOWED_ORIGINS=https://svalbardwatch.example.com,https://staging.svalbardwatch.example.com
-          SWI_SERVICE_REPLICAS=1
+          SWI_MAPPROXY_REPLICAS=1
+          SWI_TITILER_REPLICAS=1
+          SWI_METOBS_REPLICAS=1
           SWI_REDIS_PWD=smoke-test-password
+          SWI_FRONTEND_HOST=portal.localhost
           SWI_MAPPROXY_HOST=mapserver.localhost
           SWI_APIS_HOST=api.localhost
+          NUXT_PUBLIC_ENDPOINTS_API_METOBS=/api/v3
+          NUXT_PUBLIC_ENDPOINTS_API_TILES=/tiles
+          NUXT_PUBLIC_ENDPOINTS_API_ELEVATION=/oeapi/v1
+          NUXT_PUBLIC_ENDPOINTS_MAPSERVERS_MAPPROXY=/mapserver
+          NUXT_BACKEND_METOBS=http://met-public-api:8085/v3
+          NUXT_BACKEND_TILES=http://titiler-cache
+          NUXT_BACKEND_ELEVATION=http://elevation_api:8080/api
+          NUXT_BACKEND_MAPPROXY=http://mapproxy-server:8080
           SWI_METOBS_API_ROUTE=/public/
           SWI_METOBS_INTERNAL_PORT=8085
           SWI_TITILER_API_ROUTE=/tiles/
@@ -90,7 +101,7 @@ jobs:
 
       - name: Resolve *.localhost hostnames explicitly
         run: |
-          echo "127.0.0.1 mapserver.localhost api.localhost dashboard.docker.localhost" | sudo tee -a /etc/hosts
+          echo "127.0.0.1 mapserver.localhost api.localhost portal.localhost dashboard.docker.localhost" | sudo tee -a /etc/hosts
 
       - name: Create external network (Dokploy provides this in production)
         run: docker network create dokploy-network
@@ -109,7 +120,7 @@ jobs:
         # Cron containers excluded: they need real upstream API keys to fetch live data
         # and aren't part of the "does the stack come up healthy and route correctly"
         # question this gate asks.
-        run: docker compose -f compose.yml up -d redis mapproxy-server met-public-api met-tilling-api elevation_api
+        run: docker compose -f compose.yml up -d redis mapproxy-server met-public-api met-tilling-api titiler-cache elevation_api frontend
 
       - name: Wait for services to report healthy
         # Iterates every container per service, not just one: `docker compose ps -q`
@@ -118,11 +129,11 @@ jobs:
         # multi-line string that `docker inspect` can't resolve - dormant only
         # because this check never actually ran against real replica counts before
         # (see the paths: filter fix above), and CI now deliberately runs with
-        # SWI_SERVICE_REPLICAS=1. Hardened here so it stays correct regardless.
+        # replicas set to 1. Hardened here so it stays correct regardless.
         run: |
           timeout=300
           elapsed=0
-          services="mapproxy-server met-public-api met-tilling-api elevation_api"
+          services="mapproxy-server met-public-api met-tilling-api titiler-cache elevation_api frontend"
           while true; do
             unhealthy=""
             for s in $services; do
@@ -176,6 +187,45 @@ jobs:
             check_allowed "$1" "$2" "https://svalbardwatch.example.com"
             check_allowed "$1" "$2" "https://staging.svalbardwatch.example.com"
             check_blocked "$1" "$2"
+          done
+
+      - name: Frontend and titiler cache check
+        # The frontend must answer on its own host, and the titiler route must be served
+        # through the nginx cache: the second identical request has to be a HIT.
+        run: |
+          set -e
+          code=$(curl -k -s -o /dev/null -w '%{http_code}' https://portal.localhost/)
+          [ "$code" = "200" ] || { echo "FAIL: frontend returned $code"; exit 1; }
+          echo "OK: frontend answers 200"
+          url=https://api.localhost/tiles/openapi.json
+          curl -k -s -o /dev/null "$url"
+          status=$(curl -k -s -D - -o /dev/null "$url" | tr -d '\r' | grep -i '^x-cache-status:' | awk '{print $2}')
+          [ "$status" = "HIT" ] || { echo "FAIL: second titiler request was '$status', expected HIT"; exit 1; }
+          echo "OK: titiler response served from cache (HIT)"
+          # Through the frontend's same-origin proxy it must hit the same cache.
+          status=$(curl -k -s -D - -o /dev/null https://portal.localhost/tiles/openapi.json | tr -d '\r' | grep -i '^x-cache-status:' | awk '{print $2}')
+          [ "$status" = "HIT" ] || { echo "FAIL: frontend /tiles proxy was '$status', expected HIT"; exit 1; }
+          echo "OK: frontend /tiles proxy reaches the cache (HIT)"
+
+      - name: Staging auth check
+        # Re-deploys the Traefik-labelled services with the staging gate switched on and
+        # asserts every public host demands the password (and accepts it). Runs after the
+        # CORS check on purpose: with auth on, unauthenticated CORS probes would just see 401.
+        run: |
+          set -e
+          hash=$(openssl passwd -apr1 smoke-pass)
+          {
+            echo "SWI_AUTH_MIDDLEWARE=swi-gate"
+            echo "SWI_BASICAUTH_USERS='smoke:${hash}'"
+          } >> .env
+          docker compose -f compose.yml up -d frontend mapproxy-server met-public-api titiler-cache elevation_api
+          sleep 20
+          for url in https://portal.localhost/ https://mapserver.localhost/ https://api.localhost/tiles/openapi.json https://api.localhost/public/ https://api.localhost/oeapi/; do
+            anon=$(curl -k -s -o /dev/null -w '%{http_code}' "$url")
+            [ "$anon" = "401" ] || { echo "FAIL: $url returned $anon without credentials, expected 401"; exit 1; }
+            authed=$(curl -k -s -o /dev/null -w '%{http_code}' -u smoke:smoke-pass "$url")
+            [ "$authed" != "401" ] || { echo "FAIL: $url rejected valid credentials"; exit 1; }
+            echo "OK: $url -> 401 anonymous, $authed with credentials"
           done
 
       - name: Tear down

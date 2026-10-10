@@ -1,7 +1,7 @@
 {
   "release": "2.1.0",
   "release_name": "PleaseSuggestArticAnimalsNames",
-  "release_date": "2026-10-05",
+  "release_date": "2026-10-10",
   "prerelease_type": null,
   "components": {
     "swi-mapproxy": {
@@ -35,6 +35,10 @@
     "swi-elevationapi": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-elevationapi",
       "version": "0.0.4"
+    },
+    "swi-frontend": {
+      "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-frontend",
+      "version": "2.0.0"
     }
   }
 }
