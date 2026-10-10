@@ -210,10 +210,13 @@ jobs:
           status=$(curl -k -s -D - -o /dev/null "$url" | tr -d '\r' | grep -i '^x-cache-status:' | awk '{print $2}')
           [ "$status" = "HIT" ] || { echo "FAIL: second titiler request was '$status', expected HIT"; exit 1; }
           echo "OK: titiler response served from cache (HIT)"
-          # Through the frontend's same-origin proxy it must hit the same cache.
-          status=$(curl -k -s -D - -o /dev/null https://portal.localhost/tiles/openapi.json | tr -d '\r' | grep -i '^x-cache-status:' | awk '{print $2}')
-          [ "$status" = "HIT" ] || { echo "FAIL: frontend /tiles proxy was '$status', expected HIT"; exit 1; }
-          echo "OK: frontend /tiles proxy reaches the cache (HIT)"
+          # The frontend's same-origin proxy only forwards a fixed header whitelist (no
+          # X-Cache-Status), so prove the request went through the cache by its
+          # Cache-Control: nginx hides titiler's own and sets "public, max-age=600".
+          headers=$(curl -k -s -D - -o /dev/null https://portal.localhost/tiles/openapi.json | tr -d '\r')
+          echo "$headers" | head -1 | grep -q ' 200' || { echo "FAIL: frontend /tiles proxy did not return 200"; echo "$headers"; exit 1; }
+          echo "$headers" | grep -iq '^cache-control:.*max-age=600' || { echo "FAIL: frontend /tiles response did not come through the titiler cache"; echo "$headers"; exit 1; }
+          echo "OK: frontend /tiles proxy goes through the titiler cache"
 
       - name: Staging auth check
         # Re-deploys the Traefik-labelled services with the staging gate switched on and
