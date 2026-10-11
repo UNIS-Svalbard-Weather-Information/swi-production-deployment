@@ -13,8 +13,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Checkout code  # zizmor: ignore[artipacked] credentials needed: pushes the release date bump (git push)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: main
           fetch-depth: 0
@@ -35,9 +35,9 @@ jobs:
           if [ "$CURRENT_DATE" != "$TODAY" ]; then
             jq --arg d "$TODAY" '.release_date = $d' info/version.json > info/version.json.tmp && \
                mv info/version.json.tmp info/version.json
-            echo "date_updated=true" >> $GITHUB_OUTPUT
+            echo "date_updated=true" >> "$GITHUB_OUTPUT"
           else
-            echo "date_updated=false" >> $GITHUB_OUTPUT
+            echo "date_updated=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Commit and push date update (if needed)
@@ -75,22 +75,26 @@ jobs:
           fi
           VERSION_NAME=$(jq -r '.release_name' info/version.json)
 
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
-          echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          {
+            echo "version=$VERSION"
+            echo "version_name=$VERSION_NAME"
+            echo "is_prerelease=$IS_PRERELEASE"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
-        uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.get_version.outputs.version }}
-          release_name: ${{ steps.get_version.outputs.version }}
-          body: "Release ${{ steps.get_version.outputs.version_name }} version ${{ steps.get_version.outputs.version }}"
-          # Still marked as a GitHub pre-release when an alpha/beta qualifier is set,
-          # even though this is the "final" tag that ships from this cycle - it's
-          # semantically still not a stable release.
-          prerelease: ${{ steps.get_version.outputs.is_prerelease }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.get_version.outputs.version }}
+          VERSION_NAME: ${{ steps.get_version.outputs.version_name }}
+          IS_PRERELEASE: ${{ steps.get_version.outputs.is_prerelease }}
+        # Still marked as a GitHub pre-release when an alpha/beta qualifier is set,
+        # even though this is the "final" tag that ships from this cycle - it's
+        # semantically still not a stable release.
+        run: |
+          args=()
+          if [ "$IS_PRERELEASE" = "true" ]; then args+=(--prerelease); fi
+          gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" --title "$VERSION" \
+            --notes "Release $VERSION_NAME version $VERSION" "${args[@]}"
 
       - name: Create the release/X.Y.Z historical marker branch
         # A pure snapshot, created once and never touched again - this is what
@@ -168,8 +172,8 @@ jobs:
       contents: write
       actions: write
     steps:
-      - name: Checkout main
-        uses: actions/checkout@v4
+      - name: Checkout main  # zizmor: ignore[artipacked] credentials needed: EndBug/add-and-commit pushes the new staging branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: main
           fetch-depth: 0
@@ -237,7 +241,7 @@ jobs:
           mv info/version.json.tmp info/version.json
 
       - name: Commit and push the new staging branch
-        uses: EndBug/add-and-commit@v9
+        uses: EndBug/add-and-commit@a94899bca583c204427a224a7af87c02f9b325d5 # v9
         with:
           add: "info/version.json info/.release-baseline.json"
           default_author: github_actions

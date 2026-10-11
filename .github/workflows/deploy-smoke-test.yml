@@ -36,7 +36,9 @@ jobs:
       packages: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Block merge while a staging fix-PR is still pending
         # Only relevant when this run is gating the pre-prod -> main PR specifically -
@@ -86,17 +88,25 @@ jobs:
           NUXT_PUBLIC_ENDPOINTS_MAPSERVERS_MAPPROXY=/mapserver
           NUXT_BACKEND_METOBS=http://met-public-api:8085/v3
           NUXT_BACKEND_TILES=http://titiler-cache
-          NUXT_BACKEND_ELEVATION=http://elevation_api:8080/api
+          NUXT_BACKEND_ELEVATION=http://elevation_api:5000/api
           NUXT_BACKEND_MAPPROXY=http://mapproxy-server:8080
           SWI_METOBS_API_ROUTE=/public/
           SWI_METOBS_INTERNAL_PORT=8085
           SWI_TITILER_API_ROUTE=/tiles/
           SWI_ELEVATION_API_ROUTE=/oeapi/
+          SWI_ELEVATION_DTM_URL=https://public.data.npolar.no/kartdata/S0_Terrengmodell/Mosaikk/NP_S0_DTM50.zip
           SWI_SEAICE_MONITORING_ENDPOINT=http://127.0.0.1
           SWI_AVALANCHE_MONITORING_ENDPOINT=http://127.0.0.1
           SWI_METOBS_HOLFUY_API_KEY=smoke-test-key
           SWI_METOBS_FROST_API_KEY=smoke-test-key
           EOF
+
+      - name: Install a Docker Compose with pre_start support
+        # elevation_api prepares its data in a pre_start step, which the runner's preinstalled
+        # Compose rejects (also in the `compose config` validation below).
+        uses: docker/setup-compose-action@54042514f505b273907334ae2b9cdbb9a0213c1a # v2.4.0
+        with:
+          version: v5.5.1
 
       - name: Validate compose file
         run: docker compose -f compose.yml config >/dev/null
@@ -123,7 +133,10 @@ jobs:
         # must grant this repository read access, otherwise the pull below fails with
         # "unauthorized". Harmless for the public images. Not available to forked PRs
         # (no token), where the stack pull would fail the same way.
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
 
       - name: Bring the stack up
         # Cron containers excluded: they need real upstream API keys to fetch live data
@@ -167,6 +180,15 @@ jobs:
             elapsed=$((elapsed + 10))
           done
 
+      - name: Elevation check (Open Topo Data path and legacy Open-Elevation path)
+        run: |
+          set -euo pipefail
+          for path in oeapi/v1/svalbard oeapi/v1/lookup; do
+            elevation=$(curl -k -sSf "https://api.localhost/$path?locations=78.2232,15.6261" | jq '.results[0].elevation')
+            echo "$path -> $elevation"
+            jq -en --argjson e "$elevation" '$e > 0 and $e < 200' >/dev/null
+          done
+
       - name: CORS check
         run: |
           set -e
@@ -192,6 +214,8 @@ jobs:
             echo "OK: $name correctly blocks $origin"
           }
           for svc in "mapproxy https://mapserver.localhost/" "titiller https://api.localhost/tiles/" "elevationapi https://api.localhost/oeapi/" "metobs-backend https://api.localhost/public/"; do
+            # splitting "name url" into $1 and $2 is intended
+            # shellcheck disable=SC2086
             set -- $svc
             check_allowed "$1" "$2" "https://svalbardwatch.example.com"
             check_allowed "$1" "$2" "https://staging.svalbardwatch.example.com"

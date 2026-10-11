@@ -73,7 +73,7 @@ docker compose ps
 - Met observations API: `https://api.localhost/public/health` (the bare `/public/` root
   404s - neither this API nor Titiller define a root handler, only specific routes)
 - Titiller (tiles): `https://api.localhost/tiles/health`
-- Elevation API: `https://api.localhost/oeapi/v1/lookup?locations=78.22,15.62`
+- Elevation API: `https://api.localhost/oeapi/v1/svalbard?locations=78.22,15.62` (legacy: `/oeapi/v1/lookup`)
 
 (all through the self-signed cert — pass `-k`/`--insecure` with `curl`, or accept the
 browser warning, since it's a local CA)
