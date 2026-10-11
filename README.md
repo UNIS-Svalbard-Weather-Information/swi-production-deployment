@@ -197,13 +197,31 @@ Then, against the newest `staging/*` branch:
 
 Locally, run `python update_versions.py --dry-run`. Tests: `pytest tests/`.
 
+## Image vulnerability scan
+
+`.github/workflows/scan-deployed-images.yml` scans every image referenced by `compose.yml`
+(the ones this organisation builds, and redis and nginx) with Trivy, daily and on pull
+requests that change the stack. It lists the fixable HIGH and CRITICAL findings per image in
+the run summary and as warnings.
+
+- It starts in **report mode**: `ENFORCE: "false"` at the top of the workflow. Set it to
+  `"true"` to make findings fail the run for every image that has no exception.
+- An image that cannot be fixed yet goes in `.github/image-scan-exceptions.json` with a
+  reason and an end date (`swi-elevationapi` today, until OpenTopoData replaces it). It is
+  still scanned and shown, but never fails the run, and the exception stops working on its
+  end date.
+- `scripts/scan_images.py` builds the image list and the summary; its tests run first
+  (`python -m unittest tests/test_scan_images.py`).
+- `swi-frontend` is a private package: its "Manage Actions access" setting must grant this
+  repository read access.
+
 ## Per-service repos
 
-The 8 image-producing services (excluding `swi-mapproxy`, which still tags manually — its
-tag scheme isn't semver) use [release-please](https://github.com/googleapis/release-please)
+The image-producing services use [release-please](https://github.com/googleapis/release-please)
 for their own releases: commits accumulate into a standing release PR, and merging it cuts
-the tag that triggers that repo's existing `docker-build-push.yml`. Renovate is also enabled
-in each of those repos for their own dependency/Action updates, independent of the
-deployment-repo automation above.
+the tag and builds the image in the same workflow run. `swi-mapproxy` is the exception
+because its tag scheme isn't semver (`trixie-p3.13-mp7.0.0-0.0.13`): every merge that changes
+the image releases it, see that repo's README. Dependabot, not Renovate, keeps each repo's
+dependencies and Actions up to date, independent of the deployment-repo automation above.
 
 Made with puffins and polar bears helped by Claude :-)

@@ -378,7 +378,7 @@ services:
   # ── elevation-service ───────────────────────────────────────────────────
 
   elevation_api:
-    image: ghcr.io/unis-svalbard-weather-information/swi-elevationapi:1.0.0
+    image: ghcr.io/unis-svalbard-weather-information/swi-elevationapi:1.0.1
     environment:
       # Optional: another DTM archive (the CI smoke test uses the 50 m model). Empty = the 20 m
       # model of the image's datasets.json.
