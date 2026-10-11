@@ -252,7 +252,7 @@ services:
   # Titiler runs several replicas behind the Swarm VIP, so nginx resolves it through
   # Docker's embedded DNS at request time rather than once at start.
   titiler-cache:
-    image: nginx:1.28-alpine
+    image: nginx:1.31-alpine
     restart: unless-stopped
     deploy:
       replicas: 1
