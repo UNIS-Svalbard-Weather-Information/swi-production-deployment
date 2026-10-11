@@ -134,7 +134,7 @@ services:
       - internal
 
   CRON_avalanche_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:0.0.5
+    image: ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:0.1.0
     labels:
       - "traefik.enable=false"
     volumes:
