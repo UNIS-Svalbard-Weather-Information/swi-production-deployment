@@ -17,8 +17,9 @@ jobs:
         # selected in the UI (defaults to the repo's default branch, i.e. main) if
         # left unset, not necessarily pre-prod - confirmed via a real run that
         # checked out main instead and broke every "pre-prod" git revision below.
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: pre-prod
           fetch-depth: 0
 
