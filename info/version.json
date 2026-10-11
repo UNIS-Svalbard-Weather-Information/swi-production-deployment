@@ -22,15 +22,15 @@
     },
     "swi-titiller": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-titiller",
-      "version": "0.0.3"
+      "version": "0.0.4"
     },
     "swi-metobs-caching": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-caching",
-      "version": "0.0.5"
+      "version": "0.0.6"
     },
     "swi-aromearctic-caching": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-aromearctic-caching",
-      "version": "0.0.8"
+      "version": "0.0.9"
     },
     "swi-elevationapi": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-elevationapi",
