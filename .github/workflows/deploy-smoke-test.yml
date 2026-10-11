@@ -126,6 +126,13 @@ jobs:
         # (no token), where the stack pull would fail the same way.
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
+      - name: Install a Docker Compose with pre_start support
+        # elevation_api prepares its data in a pre_start step, which the runner's preinstalled
+        # Compose rejects.
+        uses: docker/setup-compose-action@54042514f505b273907334ae2b9cdbb9a0213c1a # v2.4.0
+        with:
+          version: v5.5.1
+
       - name: Bring the stack up
         # Cron containers excluded: they need real upstream API keys to fetch live data
         # and aren't part of the "does the stack come up healthy and route correctly"
