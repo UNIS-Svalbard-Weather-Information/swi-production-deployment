@@ -35,6 +35,7 @@ jobs:
       contents: write
       pull-requests: write
       actions: write
+      packages: read   # list tags of private ghcr.io images (e.g. swi-frontend)
     steps:
       - name: Find the active staging branch
         id: staging
@@ -68,6 +69,8 @@ jobs:
       - name: Check for new versions
         if: steps.staging.outputs.branch != ''
         id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python update_versions.py --dry-run --summary --json "$RUNNER_TEMP/plan.json"
           echo "internal=$(jq '[.[] | select(.kind == "internal")] | length' "$RUNNER_TEMP/plan.json")" >> "$GITHUB_OUTPUT"
@@ -76,6 +79,8 @@ jobs:
       - name: Apply internal bumps
         if: steps.staging.outputs.branch != '' && !inputs.dry_run && steps.check.outputs.internal != '0'
         id: internal
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python update_versions.py --only internal --json "$RUNNER_TEMP/internal.json"
           if git diff --quiet; then

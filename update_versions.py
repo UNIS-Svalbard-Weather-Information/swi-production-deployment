@@ -12,6 +12,7 @@ swi-metobs-backend 3.0.5 and swi-mapcache-seaice 0.0.14) must never be picked.
 """
 
 import argparse
+import base64
 import glob
 import json
 import os
@@ -149,10 +150,16 @@ def _get(url, headers=None):
 
 
 def _bearer_token(www_authenticate):
-    """Anonymous pull token from a 'Bearer realm=...,service=...,scope=...' challenge."""
+    """Pull token from a 'Bearer realm=...,service=...,scope=...' challenge. Anonymous
+    unless GITHUB_TOKEN is set: ghcr.io only lists the tags of a private package for an
+    authenticated token whose repo was granted access to that package."""
     params = dict(re.findall(r'(\w+)="([^"]*)"', www_authenticate))
     query = {k: params[k] for k in ("service", "scope") if k in params}
-    data, _ = _get(f"{params['realm']}?{urllib.parse.urlencode(query)}")
+    headers = {}
+    if os.environ.get("GITHUB_TOKEN") and urllib.parse.urlparse(params["realm"]).hostname == "ghcr.io":
+        basic = base64.b64encode(f"github-actions:{os.environ['GITHUB_TOKEN']}".encode()).decode()
+        headers["Authorization"] = f"Basic {basic}"
+    data, _ = _get(f"{params['realm']}?{urllib.parse.urlencode(query)}", headers)
     return data.get("token") or data.get("access_token")
 
 
