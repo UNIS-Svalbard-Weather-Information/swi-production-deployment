@@ -49,7 +49,10 @@ docker compose ps
 - Met observations API: `https://api.localhost/public/health` (the bare `/public/` root
   404s - neither this API nor Titiller define a root handler, only specific routes)
 - Titiller (tiles): `https://api.localhost/tiles/health`
-- Elevation API: `https://api.localhost/oeapi/v1/lookup?locations=78.22,15.62`
+- Elevation API: `https://api.localhost/oeapi/v1/svalbard?locations=78.22,15.62`
+  (Open Topo Data; the Open-Elevation `.../oeapi/v1/lookup` path still works during the
+  migration). The first start downloads and prepares the terrain model (`pre_start`), about
+  a minute for the 50 m model and a few minutes for the 20 m one
 - Traefik dashboard: `https://dashboard.localhost` (password `test123`, a local-only
   convenience credential, not a real secret)
 
