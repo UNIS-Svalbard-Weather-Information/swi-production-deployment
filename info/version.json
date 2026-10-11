@@ -18,7 +18,7 @@
     },
     "swi-metobs-backend": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend",
-      "version": "3.2.0"
+      "version": "3.2.1"
     },
     "swi-titiller": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-titiller",
