@@ -60,9 +60,13 @@ jobs:
         if: steps.command.outputs.type != '' && steps.decide.outputs.allowed == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The reason can contain the PR's head branch name, which is attacker-controlled:
+          # keep it in env vars, never interpolate it into the script.
+          TYPE: ${{ steps.command.outputs.type }}
+          REASON: ${{ steps.decide.outputs.reason }}
         run: |
           gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
-            -f body="Ignored \`${{ steps.command.outputs.type }}\` - ${{ steps.decide.outputs.reason }}"
+            -f body="Ignored \`$TYPE\` - $REASON"
 
       - name: Checkout the staging branch
         if: steps.command.outputs.type != '' && steps.decide.outputs.allowed == 'true'
@@ -75,8 +79,8 @@ jobs:
         id: qualifier
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TYPE: ${{ steps.command.outputs.type }}
         run: |
-          TYPE="${{ steps.command.outputs.type }}"
           if [ "$TYPE" = "stable" ]; then
             jq '.prerelease_type = null' info/version.json > info/version.json.tmp
             mv info/version.json.tmp info/version.json
@@ -94,19 +98,22 @@ jobs:
 
       - name: Commit and push
         if: steps.command.outputs.type != '' && steps.decide.outputs.allowed == 'true'
+        env:
+          TYPE: ${{ steps.command.outputs.type }}
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
           git add info/version.json
-          git commit -m "Set prerelease_type via PR comment (${{ steps.command.outputs.type }})"
+          git commit -m "Set prerelease_type via PR comment ($TYPE)"
           git push
 
       - name: React and reply
         if: steps.command.outputs.type != '' && steps.decide.outputs.allowed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SUMMARY: ${{ steps.qualifier.outputs.summary }}
         run: |
           gh api "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
             -f content="+1" >/dev/null
           gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
-            -f body="${{ steps.qualifier.outputs.summary }}"
+            -f body="$SUMMARY"

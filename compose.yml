@@ -217,7 +217,7 @@ services:
       - internal
 
   met-tilling-api:
-    image: ghcr.io/unis-svalbard-weather-information/swi-titiller:0.0.3
+    image: ghcr.io/unis-svalbard-weather-information/swi-titiller:0.0.4
     volumes:
       - met-forecast-data:/swi/data/forecast:ro
     restart: always
@@ -348,7 +348,7 @@ services:
   # TODO: add a monitoring/heartbeat ping once the cache run completes, matching the
   # SWI_SEAICE_MONITORING_ENDPOINT / SWI_AVALANCHE_MONITORING_ENDPOINT pattern above.
   CRON_metobs_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-metobs-caching:0.0.5
+    image: ghcr.io/unis-svalbard-weather-information/swi-metobs-caching:0.0.6
     labels:
       - "traefik.enable=false"
     volumes:
@@ -365,7 +365,7 @@ services:
   # via a Dokploy Schedule, same DOCKER_CRON stay-alive pattern as above.
   # TODO: add a monitoring/heartbeat ping once the cache run completes.
   CRON_AAforecast_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-aromearctic-caching:0.0.8
+    image: ghcr.io/unis-svalbard-weather-information/swi-aromearctic-caching:0.0.9
     labels:
       - "traefik.enable=false"
     volumes:
