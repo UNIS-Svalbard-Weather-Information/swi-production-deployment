@@ -459,7 +459,7 @@ services:
   # swi-gate (basic auth, staging) and swi-open (no-op, production default).
 
   frontend:
-    image: ghcr.io/unis-svalbard-weather-information/swi-frontend:2.2.0
+    image: ghcr.io/unis-svalbard-weather-information/swi-frontend:2.3.0
     restart: unless-stopped
     deploy:
       replicas: ${SWI_FRONTEND_REPLICAS:-1}
