@@ -86,12 +86,13 @@ jobs:
           NUXT_PUBLIC_ENDPOINTS_MAPSERVERS_MAPPROXY=/mapserver
           NUXT_BACKEND_METOBS=http://met-public-api:8085/v3
           NUXT_BACKEND_TILES=http://titiler-cache
-          NUXT_BACKEND_ELEVATION=http://elevation_api:8080/api
+          NUXT_BACKEND_ELEVATION=http://elevation_api:5000/api
           NUXT_BACKEND_MAPPROXY=http://mapproxy-server:8080
           SWI_METOBS_API_ROUTE=/public/
           SWI_METOBS_INTERNAL_PORT=8085
           SWI_TITILER_API_ROUTE=/tiles/
           SWI_ELEVATION_API_ROUTE=/oeapi/
+          SWI_ELEVATION_DTM_URL=https://public.data.npolar.no/kartdata/S0_Terrengmodell/Mosaikk/NP_S0_DTM50.zip
           SWI_SEAICE_MONITORING_ENDPOINT=http://127.0.0.1
           SWI_AVALANCHE_MONITORING_ENDPOINT=http://127.0.0.1
           SWI_METOBS_HOLFUY_API_KEY=smoke-test-key
@@ -124,6 +125,13 @@ jobs:
         # "unauthorized". Harmless for the public images. Not available to forked PRs
         # (no token), where the stack pull would fail the same way.
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Install a Docker Compose with pre_start support
+        # elevation_api prepares its data in a pre_start step, which the runner's preinstalled
+        # Compose rejects.
+        uses: docker/setup-compose-action@54042514f505b273907334ae2b9cdbb9a0213c1a # v2.4.0
+        with:
+          version: v5.5.1
 
       - name: Bring the stack up
         # Cron containers excluded: they need real upstream API keys to fetch live data
@@ -165,6 +173,15 @@ jobs:
             echo "Waiting on:$unhealthy"
             sleep 10
             elapsed=$((elapsed + 10))
+          done
+
+      - name: Elevation check (Open Topo Data path and legacy Open-Elevation path)
+        run: |
+          set -euo pipefail
+          for path in oeapi/v1/svalbard oeapi/v1/lookup; do
+            elevation=$(curl -k -sSf "https://api.localhost/$path?locations=78.2232,15.6261" | jq '.results[0].elevation')
+            echo "$path -> $elevation"
+            jq -en --argjson e "$elevation" '$e > 0 and $e < 200' >/dev/null
           done
 
       - name: CORS check
