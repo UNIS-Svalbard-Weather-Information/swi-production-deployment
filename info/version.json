@@ -6,7 +6,7 @@
   "components": {
     "swi-mapproxy": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-mapproxy",
-      "version": "trixie-p3.13-mp6.0.1-0.0.12"
+      "version": "trixie-p3.13-mp7.0.0-0.0.13"
     },
     "swi-mapcache-seaice": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-mapcache-seaice",
@@ -18,7 +18,7 @@
     },
     "swi-metobs-backend": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend",
-      "version": "3.2.1"
+      "version": "3.2.2"
     },
     "swi-titiller": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-titiller",
@@ -38,7 +38,7 @@
     },
     "swi-frontend": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-frontend",
-      "version": "2.1.0"
+      "version": "2.2.0"
     }
   }
 }
