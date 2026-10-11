@@ -1,7 +1,7 @@
 {
   "release": "2.1.0",
   "release_name": "PleaseSuggestArticAnimalsNames",
-  "release_date": "2026-10-10",
+  "release_date": "2026-10-11",
   "prerelease_type": null,
   "components": {
     "swi-mapproxy": {
@@ -10,15 +10,15 @@
     },
     "swi-mapcache-seaice": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-mapcache-seaice",
-      "version": "0.0.15"
+      "version": "0.1.0"
     },
     "swi-avalanche-caching": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-avalanche-caching",
-      "version": "0.0.5"
+      "version": "0.1.0"
     },
     "swi-metobs-backend": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend",
-      "version": "3.2.0"
+      "version": "3.2.1"
     },
     "swi-titiller": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-titiller",

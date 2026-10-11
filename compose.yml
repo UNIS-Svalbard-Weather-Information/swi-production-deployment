@@ -119,7 +119,7 @@ services:
       - internal
 
   CRON_seaice_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-mapcache-seaice:0.0.15
+    image: ghcr.io/unis-svalbard-weather-information/swi-mapcache-seaice:0.1.0
     labels:
       - "traefik.enable=false"
     volumes:
@@ -134,7 +134,7 @@ services:
       - internal
 
   CRON_avalanche_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:0.0.5
+    image: ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:0.1.0
     labels:
       - "traefik.enable=false"
     volumes:
@@ -163,7 +163,7 @@ services:
     # merged. Once it merges and a new image is released, switch this healthcheck to
     # /ready so Swarm's start-first rolling update actually gates on real readiness
     # instead of bare liveness.
-    image: ghcr.io/unis-svalbard-weather-information/swi-metobs-backend:3.2.0
+    image: ghcr.io/unis-svalbard-weather-information/swi-metobs-backend:3.2.1
     volumes:
       - met-forecast-data:/swi/data/forecast:ro
       - met-historical-data:/swi/data/historical:ro
@@ -252,7 +252,7 @@ services:
   # Titiler runs several replicas behind the Swarm VIP, so nginx resolves it through
   # Docker's embedded DNS at request time rather than once at start.
   titiler-cache:
-    image: nginx:1.28-alpine
+    image: nginx:1.31-alpine
     restart: unless-stopped
     deploy:
       replicas: 1
