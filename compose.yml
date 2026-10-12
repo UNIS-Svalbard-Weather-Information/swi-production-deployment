@@ -19,6 +19,23 @@ name: SW-SWI-SRM-Services
 #     staging so a single basic-auth login covers the whole app). See .env.example.
 # Titiler is only reachable through titiler-cache (nginx, 10 min TTL), never directly.
 
+# Permissions (Docker Swarm honours cap_drop, read_only and user; it ignores security_opt and
+# the tmpfs: shorthand, hence the `type: tmpfs` volume mounts below):
+#   - Every SWI image runs as uid/gid 9001 (the project reserves uids above 9000): the cron
+#     jobs that write the shared volumes, mapproxy, and the services that only read them. The
+#     images create their mount points owned by that uid, so a *fresh* named volume is
+#     writable by all of them whichever container mounts it first. Volumes created before this
+#     change are owned by root (uid 1000 for mapproxy's tile cache) and must be recreated, or
+#     chowned once (docker run --rm -v <volume>:/v alpine chown -R 9001:9001 /v), when this
+#     version is deployed: map-data, map-metadata, aval-raster-cache, met-forecast-data,
+#     met-historical-data, met-realtime-data and tiles-cache. redis_data too, but for its own
+#     user: Redis now runs as "redis" (uid 999) and cannot read the root-owned dump.rdb that
+#     the old root-run Redis left there, so it would crash-loop on the old volume.
+#   - Capabilities are dropped on every container that does not need them.
+#   - The two read-only APIs and the frontend also get a read-only root filesystem and a RAM
+#     /tmp. The cron jobs and mapproxy write next to their code (logs, clones, temp files),
+#     so they keep a writable root filesystem.
+
 services:
 
   # ── shared ──────────────────────────────────────────────────────────────
@@ -26,16 +43,25 @@ services:
   redis:
     image: redis:8.10-alpine
     restart: unless-stopped
+    # The wrapper command below replaces the image's own switch to the redis user, so run as it
+    # explicitly. The ACL file (it holds the password) is written to a private RAM /tmp.
+    user: redis
+    read_only: true
+    cap_drop: [ALL]
     labels:
       - "traefik.enable=false"
     command: >
       sh -c '
-      mkdir -p /usr/local/etc/redis &&
-      echo "user default on >$$REDIS_PASSWORD ~* +@all" > /usr/local/etc/redis/users.acl &&
-      exec redis-server --save 60 1 --loglevel warning --aclfile /usr/local/etc/redis/users.acl
+      umask 077 &&
+      echo "user default on >$$REDIS_PASSWORD ~* +@all" > /tmp/users.acl &&
+      exec redis-server --save 60 1 --loglevel warning --aclfile /tmp/users.acl
       '
     volumes:
       - redis_data:/data
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 8388608
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
@@ -51,6 +77,7 @@ services:
 
   mapproxy-server:
     image: ghcr.io/unis-svalbard-weather-information/swi-mapproxy:trixie-p3.13-mp7.0.0-0.0.13
+    cap_drop: [ALL]
     volumes:
       - map-data:/mapproxy/data
       - map-metadata:/mapproxy/metadata
@@ -120,6 +147,7 @@ services:
 
   CRON_seaice_cache:
     image: ghcr.io/unis-svalbard-weather-information/swi-mapcache-seaice:0.1.0
+    cap_drop: [ALL]
     labels:
       - "traefik.enable=false"
     volumes:
@@ -135,6 +163,7 @@ services:
 
   CRON_avalanche_cache:
     image: ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:0.1.0
+    cap_drop: [ALL]
     labels:
       - "traefik.enable=false"
     volumes:
@@ -164,7 +193,13 @@ services:
     # /ready so Swarm's start-first rolling update actually gates on real readiness
     # instead of bare liveness.
     image: ghcr.io/unis-svalbard-weather-information/swi-metobs-backend:3.2.2
+    cap_drop: [ALL]
+    read_only: true
     volumes:
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 67108864
       - met-forecast-data:/swi/data/forecast:ro
       - met-historical-data:/swi/data/historical:ro
       - met-realtime-data:/swi/data/realtime:ro
@@ -218,7 +253,13 @@ services:
 
   met-tilling-api:
     image: ghcr.io/unis-svalbard-weather-information/swi-titiller:0.0.4
+    cap_drop: [ALL]
+    read_only: true
     volumes:
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 67108864
       - met-forecast-data:/swi/data/forecast:ro
     restart: always
     deploy:
@@ -254,6 +295,10 @@ services:
   titiler-cache:
     image: nginx:1.31-alpine
     restart: unless-stopped
+    # The master process starts as root to chown the cache directory and drop to the nginx
+    # user for its workers, so keep exactly those capabilities.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, NET_BIND_SERVICE]
     deploy:
       replicas: 1
       update_config:
@@ -349,6 +394,7 @@ services:
   # SWI_SEAICE_MONITORING_ENDPOINT / SWI_AVALANCHE_MONITORING_ENDPOINT pattern above.
   CRON_metobs_cache:
     image: ghcr.io/unis-svalbard-weather-information/swi-metobs-caching:0.0.6
+    cap_drop: [ALL]
     labels:
       - "traefik.enable=false"
     volumes:
@@ -366,6 +412,7 @@ services:
   # TODO: add a monitoring/heartbeat ping once the cache run completes.
   CRON_AAforecast_cache:
     image: ghcr.io/unis-svalbard-weather-information/swi-aromearctic-caching:0.0.9
+    cap_drop: [ALL]
     labels:
       - "traefik.enable=false"
     volumes:
@@ -460,6 +507,13 @@ services:
 
   frontend:
     image: ghcr.io/unis-svalbard-weather-information/swi-frontend:2.3.0
+    cap_drop: [ALL]
+    read_only: true
+    volumes:
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 67108864
     restart: unless-stopped
     deploy:
       replicas: ${SWI_FRONTEND_REPLICAS:-1}
