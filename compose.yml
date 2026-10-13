@@ -76,7 +76,7 @@ services:
   # MapProxy WMTS server, plus the sea-ice and avalanche cron caching jobs it depends on.
 
   mapproxy-server:
-    image: ghcr.io/unis-svalbard-weather-information/swi-mapproxy:trixie-p3.13-mp7.0.0-0.0.13
+    image: ghcr.io/unis-svalbard-weather-information/swi-mapproxy:trixie-p3.13-mp7.0.0-0.0.14
     cap_drop: [ALL]
     volumes:
       - map-data:/mapproxy/data
@@ -146,7 +146,7 @@ services:
       - internal
 
   CRON_seaice_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-mapcache-seaice:0.1.0
+    image: ghcr.io/unis-svalbard-weather-information/swi-mapcache-seaice:0.2.0
     cap_drop: [ALL]
     labels:
       - "traefik.enable=false"
@@ -162,7 +162,7 @@ services:
       - internal
 
   CRON_avalanche_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:0.1.0
+    image: ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:0.2.0
     cap_drop: [ALL]
     labels:
       - "traefik.enable=false"
@@ -252,7 +252,7 @@ services:
       - internal
 
   met-tilling-api:
-    image: ghcr.io/unis-svalbard-weather-information/swi-titiller:0.0.4
+    image: ghcr.io/unis-svalbard-weather-information/swi-titiller:0.1.0
     cap_drop: [ALL]
     read_only: true
     volumes:
@@ -393,7 +393,7 @@ services:
   # TODO: add a monitoring/heartbeat ping once the cache run completes, matching the
   # SWI_SEAICE_MONITORING_ENDPOINT / SWI_AVALANCHE_MONITORING_ENDPOINT pattern above.
   CRON_metobs_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-metobs-caching:0.0.6
+    image: ghcr.io/unis-svalbard-weather-information/swi-metobs-caching:0.1.0
     cap_drop: [ALL]
     labels:
       - "traefik.enable=false"
@@ -411,7 +411,7 @@ services:
   # via a Dokploy Schedule, same DOCKER_CRON stay-alive pattern as above.
   # TODO: add a monitoring/heartbeat ping once the cache run completes.
   CRON_AAforecast_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-aromearctic-caching:0.0.9
+    image: ghcr.io/unis-svalbard-weather-information/swi-aromearctic-caching:0.1.0
     cap_drop: [ALL]
     labels:
       - "traefik.enable=false"
@@ -506,7 +506,7 @@ services:
   # swi-gate (basic auth, staging) and swi-open (no-op, production default).
 
   frontend:
-    image: ghcr.io/unis-svalbard-weather-information/swi-frontend:2.4.0
+    image: ghcr.io/unis-svalbard-weather-information/swi-frontend:2.5.0
     cap_drop: [ALL]
     read_only: true
     volumes:
