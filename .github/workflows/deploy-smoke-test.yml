@@ -86,6 +86,7 @@ jobs:
           NUXT_PUBLIC_ENDPOINTS_API_TILES=/tiles
           NUXT_PUBLIC_ENDPOINTS_API_ELEVATION=/oeapi/v1
           NUXT_PUBLIC_ENDPOINTS_MAPSERVERS_MAPPROXY=/mapserver
+          NUXT_PUBLIC_ENDPOINTS_API_UNIS=/unis
           NUXT_BACKEND_METOBS=http://met-public-api:8085/v3
           NUXT_BACKEND_TILES=http://titiler-cache
           NUXT_BACKEND_ELEVATION=http://elevation_api:5000/api
