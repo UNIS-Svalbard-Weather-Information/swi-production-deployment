@@ -1,7 +1,7 @@
 {
   "release": "3.0.0",
   "release_name": "PleaseSuggestArticAnimalsNames",
-  "release_date": "2026-10-13",
+  "release_date": "2026-10-14",
   "prerelease_type": null,
   "components": {
     "swi-mapproxy": {
@@ -18,7 +18,7 @@
     },
     "swi-metobs-backend": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend",
-      "version": "3.2.2"
+      "version": "3.3.0"
     },
     "swi-titiller": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-titiller",
@@ -38,7 +38,7 @@
     },
     "swi-frontend": {
       "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-frontend",
-      "version": "2.5.0"
+      "version": "2.6.0"
     }
   }
 }
