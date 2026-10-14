@@ -1,0 +1,7 @@
+[
+  {
+    "image": "ghcr.io/unis-svalbard-weather-information/swi-elevationapi",
+    "reason": "Built on the unmaintained open-elevation image (Ubuntu 20.04, last build 2021) which cannot be patched; being replaced by OpenTopoData",
+    "expires": "2027-01-31"
+  }
+]

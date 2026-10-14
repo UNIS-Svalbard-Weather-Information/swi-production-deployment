@@ -19,14 +19,19 @@ jobs:
       contents: write
     steps:
       - name: Checkout pre-prod
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: pre-prod
 
       - name: Determine the staging branch being promoted
         id: source
+        # Branch names are attacker-controlled text: keep them in env vars, never in the script.
+        env:
+          STAGING_INPUT: ${{ github.event.inputs.staging_branch }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          echo "branch=${{ github.event.inputs.staging_branch || github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
+          echo "branch=${STAGING_INPUT:-$PR_HEAD_REF}" >> "$GITHUB_OUTPUT"
 
       - name: Read release version
         # Composes in the alpha/beta qualifier if one was set via a /alpha or /beta PR
@@ -54,19 +59,26 @@ jobs:
         id: rc
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          MAX_RC=$(gh api "repos/${{ github.repository }}/releases?per_page=100" \
-            --jq '[.[] | .tag_name | select(startswith("${{ steps.version.outputs.version }}-rc")) | ltrimstr("${{ steps.version.outputs.version }}-rc") | tonumber] | max // 0')
+          # $ENV belongs to the jq filter, not the shell
+          # shellcheck disable=SC2016
+          MAX_RC=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq '[.[] | .tag_name | select(startswith($ENV.VERSION + "-rc")) | ltrimstr($ENV.VERSION + "-rc") | tonumber] | max // 0')
           echo "next=$((MAX_RC + 1))" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub pre-release
-        uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.version.outputs.version }}-rc${{ steps.rc.outputs.next }}
-          release_name: ${{ steps.version.outputs.version }}-rc${{ steps.rc.outputs.next }} (pre-release)
-          body: |
-            Pre-release for ${{ steps.version.outputs.version }}, now deployed to pre-prod
-            from `${{ steps.source.outputs.branch }}`.
-          prerelease: true
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          RC: ${{ steps.rc.outputs.next }}
+          BRANCH: ${{ steps.source.outputs.branch }}
+        # No --target, like the archived actions/create-release it replaces: the tag is
+        # created on the repository's default branch.
+        run: |
+          TAG="${VERSION}-rc${RC}"
+          # the backticks are literal Markdown
+          # shellcheck disable=SC2016
+          NOTES="$(printf 'Pre-release for %s, now deployed to pre-prod\nfrom `%s`.\n' "$VERSION" "$BRANCH")"
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease \
+            --title "$TAG (pre-release)" --notes "$NOTES"

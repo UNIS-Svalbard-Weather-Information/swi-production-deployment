@@ -30,14 +30,15 @@ cp .env.example .env
 ```
 
 Now edit `.env`: everything already defaults to `*.localhost` hosts, fine as-is for local
-testing, but set **`SWI_SERVICE_REPLICAS=1`** - the example file defaults to `3` (production's
-value) since it's meant to double as a template for real deployment, and running 9
-containers for 3 services on a laptop is unnecessary weight for a dev loop.
+testing, but set **`SWI_MAPPROXY_REPLICAS=1`, `SWI_TITILER_REPLICAS=1` and
+`SWI_METOBS_REPLICAS=1`** - the example file defaults to `3` (production's value) since
+it's meant to double as a template for real deployment, and running 9 containers for 3
+services on a laptop is unnecessary weight for a dev loop.
 
 ```bash
 # 4. Bring the stack up (cron containers excluded - they need real upstream API keys,
 #    see API_KEYS.md if you want to run those too)
-docker compose -f compose.yml up -d redis mapproxy-server met-public-api met-tilling-api elevation_api
+docker compose -f compose.yml up -d redis mapproxy-server met-public-api met-tilling-api titiler-cache elevation_api frontend
 
 # Give services a minute to pass their start_period healthchecks
 docker compose ps
@@ -48,7 +49,10 @@ docker compose ps
 - Met observations API: `https://api.localhost/public/health` (the bare `/public/` root
   404s - neither this API nor Titiller define a root handler, only specific routes)
 - Titiller (tiles): `https://api.localhost/tiles/health`
-- Elevation API: `https://api.localhost/oeapi/v1/lookup?locations=78.22,15.62`
+- Elevation API: `https://api.localhost/oeapi/v1/svalbard?locations=78.22,15.62`
+  (Open Topo Data; the Open-Elevation `.../oeapi/v1/lookup` path still works during the
+  migration). The first start downloads and prepares the terrain model (`pre_start`), about
+  a minute for the 50 m model and a few minutes for the 20 m one
 - Traefik dashboard: `https://dashboard.localhost` (password `test123`, a local-only
   convenience credential, not a real secret)
 
@@ -81,15 +85,43 @@ docker network rm dokploy-network
 | map-service | `mapproxy-server`, `CRON_seaice_cache`, `CRON_avalanche_cache` | `swi-mapproxy`, `swi-mapcache-seaice`, `swi-avalanche-caching` |
 | met-service | `met-public-api`, `met-tilling-api`, `CRON_metobs_cache`, `CRON_AAforecast_cache` | `swi-metobs-backend`, `swi-titiller`, `swi-metobs-caching`, `swi-aromearctic-caching` |
 | elevation-service | `elevation_api` | `swi-elevationapi` |
+| frontend | `frontend` | `swi-frontend` |
 
 Plus a shared `redis` used by both mapproxy (tile cache) and met-public-api (response
 cache). Routing and CORS are handled by Traefik via Docker labels (Dokploy runs Traefik on
 the `dokploy-network` external network) - see the CORS note above for the one exception.
 
 `mapproxy-server`, `met-public-api`, and `met-tilling-api` read their replica count from
-`SWI_SERVICE_REPLICAS` (default `3`, production's value - unset in Dokploy, it behaves
-exactly as before this variable existed). `elevation_api` always runs 1 - it's already
-minimal in both environments, nothing to override.
+`SWI_MAPPROXY_REPLICAS`, `SWI_METOBS_REPLICAS` and `SWI_TITILER_REPLICAS` respectively
+(each defaults to `3`, production's value - leave them unset in the production Dokploy
+project). `frontend` defaults to 1 (`SWI_FRONTEND_REPLICAS`). `elevation_api` always runs
+1 - it's already minimal in both environments, nothing to override. These replace the
+former single `SWI_SERVICE_REPLICAS`, which is no longer read.
+
+### Staging vs production
+
+Both environments deploy this same `compose.yml`; the Dokploy environment variables make
+the difference.
+
+| | Production | Staging |
+|---|---|---|
+| Replicas | defaults (3 / 3 / 3) | `SWI_MAPPROXY_REPLICAS=1`, `SWI_TITILER_REPLICAS=1` (metobs stays 3) |
+| Password | none (`SWI_AUTH_MIDDLEWARE` unset, no-op `swi-open`) | `SWI_AUTH_MIDDLEWARE=swi-gate` + `SWI_BASICAUTH_USERS` (HTTP basic auth on every public router) |
+| Frontend mode | **direct**: `NUXT_PUBLIC_ENDPOINTS_*` are absolute `https://api.…` / `https://mapserver.…` URLs, `NUXT_BACKEND_*` unset, `CORS_ALLOWED_ORIGINS` includes `https://<SWI_FRONTEND_HOST>` | **same-origin proxy**: `NUXT_PUBLIC_ENDPOINTS_*` relative, `NUXT_BACKEND_*` = internal service URLs (see `.env.example`) |
+
+Staging must use proxy mode: browsers don't send basic-auth credentials on cross-origin
+requests and CORS preflights never carry them, so a password on the API hosts would break
+the app in direct mode. In proxy mode the browser only talks to the frontend host, so one
+login covers everything (the API/mapserver hosts stay password-protected too).
+
+### Titiler cache
+
+`met-tilling-api` is no longer routed by Traefik. The `titiler-cache` service (nginx)
+sits in front of it: successful `GET`/`HEAD` responses are cached for 10 minutes (stale
+copies are served on errors or while refreshing, `/health` is never cached, and every
+response carries `X-Cache-Status: HIT|MISS|BYPASS|STALE`). The cache is shared by the
+public `/tiles/` route and the staging frontend proxy, lives in the `titiler-cache`
+volume (max 2 GB), and CORS is still added by Traefik after it.
 
 Two repos feed config into running containers at boot rather than build time —
 `swi-mapproxy-configuration` (mapproxy.yaml) and `swi-metobs-station-configuration`
@@ -165,13 +197,31 @@ Then, against the newest `staging/*` branch:
 
 Locally, run `python update_versions.py --dry-run`. Tests: `pytest tests/`.
 
+## Image vulnerability scan
+
+`.github/workflows/scan-deployed-images.yml` scans every image referenced by `compose.yml`
+(the ones this organisation builds, and redis and nginx) with Trivy, daily and on pull
+requests that change the stack. It lists the fixable HIGH and CRITICAL findings per image in
+the run summary and as warnings.
+
+- It starts in **report mode**: `ENFORCE: "false"` at the top of the workflow. Set it to
+  `"true"` to make findings fail the run for every image that has no exception.
+- An image that cannot be fixed yet goes in `.github/image-scan-exceptions.json` with a
+  reason and an end date (`swi-elevationapi` today, until OpenTopoData replaces it). It is
+  still scanned and shown, but never fails the run, and the exception stops working on its
+  end date.
+- `scripts/scan_images.py` builds the image list and the summary; its tests run first
+  (`python -m unittest tests/test_scan_images.py`).
+- `swi-frontend` is a private package: its "Manage Actions access" setting must grant this
+  repository read access.
+
 ## Per-service repos
 
-The 8 image-producing services (excluding `swi-mapproxy`, which still tags manually — its
-tag scheme isn't semver) use [release-please](https://github.com/googleapis/release-please)
+The image-producing services use [release-please](https://github.com/googleapis/release-please)
 for their own releases: commits accumulate into a standing release PR, and merging it cuts
-the tag that triggers that repo's existing `docker-build-push.yml`. Renovate is also enabled
-in each of those repos for their own dependency/Action updates, independent of the
-deployment-repo automation above.
+the tag and builds the image in the same workflow run. `swi-mapproxy` is the exception
+because its tag scheme isn't semver (`trixie-p3.13-mp7.0.0-0.0.13`): every merge that changes
+the image releases it, see that repo's README. Dependabot, not Renovate, keeps each repo's
+dependencies and Actions up to date, independent of the deployment-repo automation above.
 
 Made with puffins and polar bears helped by Claude :-)
