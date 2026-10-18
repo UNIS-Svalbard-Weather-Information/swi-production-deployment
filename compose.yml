@@ -387,6 +387,109 @@ services:
       - dokploy-network
       - internal
 
+  # Caching reverse proxy for the Feltlogg API (https://feltlogg.com/api/v1). It injects the
+  # Bearer API key server-side (clients never send or see it) and caches successful GET/HEAD
+  # for 10 min to spare Feltlogg. Same start-up-written-config pattern as titiler-cache above;
+  # `$$` is compose escaping for a literal `$`. nginx resolves feltlogg.com at request time
+  # (variable in proxy_pass) and verifies its TLS cert, so the key is never sent over an
+  # unverified connection. The /feltlogg/ prefix is stripped by Traefik, then mapped under the
+  # upstream's /api/v1.
+  feltlogg-cache:
+    image: nginx:1.31-alpine
+    restart: unless-stopped
+    # Master starts as root to chown the cache dir and drop to the nginx user; keep only those.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, NET_BIND_SERVICE]
+    environment:
+      - FELTLOGG_API_KEY=${SWI_FELTLOGG_API_KEY?Variable not set}
+    deploy:
+      replicas: 1
+      update_config:
+        order: start-first
+        failure_action: rollback
+    command:
+      - sh
+      - -c
+      - |
+        mkdir -p /var/cache/nginx/feltlogg && chown -R nginx:nginx /var/cache/nginx/feltlogg
+        cat > /etc/nginx/conf.d/default.conf <<'EOF'
+        proxy_cache_path /var/cache/nginx/feltlogg levels=1:2 keys_zone=feltlogg:10m max_size=500m inactive=1h use_temp_path=off;
+
+        server {
+          listen 80;
+          resolver 127.0.0.11 valid=10s ipv6=off;
+
+          location = /nginx-health { access_log off; default_type text/plain; return 200 "ok"; }
+
+          location / {
+            # Read-only proxy: the injected key must not be usable for writes.
+            limit_except GET HEAD { deny all; }
+
+            set $$fl feltlogg.com;
+            proxy_pass https://$$fl/api/v1$$request_uri;
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_set_header Host feltlogg.com;
+            # Verify the upstream TLS cert - the Bearer key travels on this connection.
+            proxy_ssl_server_name on;
+            proxy_ssl_name feltlogg.com;
+            proxy_ssl_verify on;
+            proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+            # Inject the API key server-side; strip any client-supplied key.
+            proxy_set_header Authorization "Bearer __FELTLOGG_KEY__";
+            proxy_set_header X-API-Key "";
+            proxy_read_timeout 60s;
+
+            proxy_cache feltlogg;
+            proxy_cache_methods GET HEAD;
+            proxy_cache_key "$$request_uri";
+            proxy_cache_valid 200 10m;
+            proxy_ignore_headers Cache-Control Expires Set-Cookie;
+            proxy_hide_header Cache-Control;
+            proxy_hide_header Set-Cookie;
+            proxy_cache_lock on;
+            proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+            proxy_cache_background_update on;
+            add_header X-Cache-Status $$upstream_cache_status;
+            add_header Cache-Control "public, max-age=600";
+          }
+        }
+        EOF
+        sed -i "s|__FELTLOGG_KEY__|$$FELTLOGG_API_KEY|" /etc/nginx/conf.d/default.conf
+        exec nginx -g 'daemon off;'
+    volumes:
+      - feltlogg-cache:/var/cache/nginx/feltlogg
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.feltlogg.rule=Host(`${SWI_APIS_HOST?Variable not set}`)  && PathPrefix(`${SWI_FELTLOGG_API_ROUTE?Variable not set}`)"
+      - "traefik.http.routers.feltlogg.entrypoints=websecure"
+      - "traefik.http.routers.feltlogg.tls=true"
+      - "traefik.http.routers.feltlogg.tls.certresolver=${TRAEFIK_CERT_RESOLVER-letsencrypt}"
+      - "traefik.http.services.feltlogg.loadbalancer.server.port=80"
+      - "traefik.docker.network=dokploy-network"
+
+      # CORS middleware (Feltlogg sends none of its own; this proxy is read-only).
+      - "traefik.http.middlewares.feltloggcors.headers.accesscontrolallowmethods=GET,HEAD,OPTIONS"
+      - "traefik.http.middlewares.feltloggcors.headers.accesscontrolallowheaders=*"
+      - "traefik.http.middlewares.feltloggcors.headers.accesscontrolalloworiginlist=${CORS_ALLOWED_ORIGINS?Variable not set}"
+      - "traefik.http.middlewares.feltloggcors.headers.accesscontrolallowcredentials=true"
+
+      # Strip the public /feltlogg/ prefix before proxying.
+      - "traefik.http.middlewares.feltlogg-stripprefix.stripprefix.prefixes=${SWI_FELTLOGG_API_ROUTE?Variable not set}"
+
+      # Once the security-hardening branch lands on staging, append ,swi-sechdrs,swi-ratelimit
+      # (those middlewares are defined there, not on this base branch).
+      - "traefik.http.routers.feltlogg.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open},feltlogg-stripprefix,feltloggcors"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/nginx-health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - dokploy-network
+      - internal
+
   # Cache met observations from met.no. Prod: cron every 10 minutes via a Dokploy
   # Schedule (`docker exec <container> run-cron`) — DOCKER_CRON keeps this container
   # alive between runs instead of exiting after the first pass.
@@ -566,6 +669,8 @@ services:
 
 volumes:
   titiler-cache:
+
+  feltlogg-cache:
 
   tiles-cache:
 
