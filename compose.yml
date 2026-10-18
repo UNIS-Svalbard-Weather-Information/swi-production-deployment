@@ -124,7 +124,7 @@ services:
       - "traefik.http.middlewares.mapproxyheaders.headers.customresponseheaders.Access-Control-Allow-Origin="
 
       # Apply middlewares
-      - "traefik.http.routers.mapproxy-server.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open},mapproxycors,mapproxyheaders"
+      - "traefik.http.routers.mapproxy-server.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open},mapproxycors,mapproxyheaders,swi-sechdrs"
 
       # Sticky Session
       - "traefik.http.services.mapproxy-server.loadbalancer.sticky=true"
@@ -228,7 +228,7 @@ services:
       # Middleware
       - "traefik.http.middlewares.metobs-stripprefix.stripprefix.prefixes=${SWI_METOBS_API_ROUTE?Variable not set}"
 
-      - "traefik.http.routers.metobs.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open},metobs-stripprefix"
+      - "traefik.http.routers.metobs.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open},metobs-stripprefix,swi-sechdrs,swi-ratelimit"
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf 'http://127.0.0.1:${SWI_METOBS_INTERNAL_PORT:-8085}/health' >/dev/null || exit 1"]
       interval: 60s
@@ -374,7 +374,7 @@ services:
       # Middleware
       - "traefik.http.middlewares.titiller-stripprefix.stripprefix.prefixes=${SWI_TITILER_API_ROUTE?Variable not set}"
 
-      - "traefik.http.routers.titiller.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open},titiller-stripprefix,titillercors"
+      - "traefik.http.routers.titiller.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open},titiller-stripprefix,titillercors,swi-sechdrs"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/nginx-health || exit 1"]
       interval: 30s
@@ -426,6 +426,14 @@ services:
 
   elevation_api:
     image: ghcr.io/unis-svalbard-weather-information/swi-elevationapi:1.0.1
+    # nginx+uwsgi+supervisor: the master starts as root to drop to an unprivileged
+    # user, so keep only those capabilities (port 5000 is unprivileged, so no
+    # NET_BIND_SERVICE). read_only is intentionally NOT set: the upstream Open Topo
+    # Data image's supervisor writes /app/supervisord.log inside its WORKDIR, so a
+    # read-only root needs an image-side change to redirect those logs first
+    # (tracked as a follow-up in swi-elevationapi).
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE]
     environment:
       # Optional: another DTM archive (the CI smoke test uses the 50 m model). Empty = the 20 m
       # model of the image's datasets.json.
@@ -483,7 +491,7 @@ services:
       - "traefik.http.middlewares.oeapistrip.headers.customresponseheaders.Access-Control-Allow-Headers="
 
       # Apply middlewares
-      - "traefik.http.routers.oeapi.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open},rewrite-oeapi,oeapicors,oeapistrip"
+      - "traefik.http.routers.oeapi.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open},rewrite-oeapi,oeapicors,oeapistrip,swi-sechdrs,swi-ratelimit"
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf 'http://127.0.0.1:5000/v1/svalbard?locations=78.22,15.62' >/dev/null || exit 1"]
       interval: 60s
@@ -540,7 +548,20 @@ services:
       - "traefik.http.middlewares.swi-gate.basicauth.removeheader=true"
       - "traefik.http.middlewares.swi-open.headers.customrequestheaders.X-Swi-Gate=open"
 
-      - "traefik.http.routers.frontend.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open}"
+      # Security headers shared by all routers. HSTS is toggleable: SWI_HSTS_SECONDS=0
+      # omits the STS header (Traefik's behaviour), e.g. local dev with the self-signed
+      # *.localhost cert. No includeSubDomains/preload (shared host, many subdomains).
+      - "traefik.http.middlewares.swi-sechdrs.headers.stsseconds=${SWI_HSTS_SECONDS:-300}"
+      - "traefik.http.middlewares.swi-sechdrs.headers.contenttypenosniff=true"
+      - "traefik.http.middlewares.swi-sechdrs.headers.referrerpolicy=strict-origin-when-cross-origin"
+      - "traefik.http.middlewares.swi-sechdrs.headers.customframeoptionsvalue=SAMEORIGIN"
+
+      # Per-source-IP rate limit for the expensive APIs. SWI_RATELIMIT_AVG=0 disables
+      # it (Traefik treats average=0 as unlimited), e.g. for local dev.
+      - "traefik.http.middlewares.swi-ratelimit.ratelimit.average=${SWI_RATELIMIT_AVG:-30}"
+      - "traefik.http.middlewares.swi-ratelimit.ratelimit.burst=${SWI_RATELIMIT_BURST:-60}"
+
+      - "traefik.http.routers.frontend.middlewares=${SWI_AUTH_MIDDLEWARE:-swi-open},swi-sechdrs"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1"]
       interval: 30s
