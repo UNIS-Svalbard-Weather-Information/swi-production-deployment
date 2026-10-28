@@ -76,7 +76,7 @@ services:
   # MapProxy WMTS server, plus the sea-ice and avalanche cron caching jobs it depends on.
 
   mapproxy-server:
-    image: ghcr.io/unis-svalbard-weather-information/swi-mapproxy:trixie-p3.13-mp7.0.0-0.0.14
+    image: ghcr.io/unis-svalbard-weather-information/swi-mapproxy:trixie-p3.13-mp7.0.0-0.0.17
     cap_drop: [ALL]
     volumes:
       - map-data:/mapproxy/data
@@ -162,7 +162,7 @@ services:
       - internal
 
   CRON_avalanche_cache:
-    image: ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:0.2.0
+    image: ghcr.io/unis-svalbard-weather-information/swi-avalanche-caching:0.2.1
     cap_drop: [ALL]
     labels:
       - "traefik.enable=false"
