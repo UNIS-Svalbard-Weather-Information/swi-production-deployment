@@ -3,7 +3,7 @@ name: Update component versions
 # Replaces Renovate (which never landed a single bump here - every image-tag change in
 # compose.yml so far was made by hand). Checks every image pinned in the compose files
 # for a newer tag that actually exists in its registry (update_versions.py) and:
-# - our own ghcr.io/unis-svalbard-weather-information/* images: commits the bumps,
+# - our own ghcr.io/svalbard-watch/* images: commits the bumps,
 #   plus the regenerated info/version.json, straight onto the active staging/X.Y.Z
 #   branch - same as Renovate's branch automerge was configured to do. Promoting
 #   staging to pre-prod stays the human gate (ensure-preprod-pr.yml).

@@ -1,43 +1,43 @@
 {
   "release": "3.0.0",
   "release_name": "PleaseSuggestArticAnimalsNames",
-  "release_date": "2026-11-03",
+  "release_date": "2026-11-05",
   "prerelease_type": null,
   "components": {
     "swi-mapproxy": {
-      "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-mapproxy",
+      "url": "https://github.com/svalbard-watch/swi-mapproxy",
       "version": "trixie-p3.13-mp7.0.0-0.0.17"
     },
     "swi-mapcache-seaice": {
-      "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-mapcache-seaice",
+      "url": "https://github.com/svalbard-watch/swi-mapcache-seaice",
       "version": "0.2.1"
     },
     "swi-avalanche-caching": {
-      "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-avalanche-caching",
+      "url": "https://github.com/svalbard-watch/swi-avalanche-caching",
       "version": "0.2.1"
     },
     "swi-metobs-backend": {
-      "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend",
+      "url": "https://github.com/svalbard-watch/swi-metobs-backend",
       "version": "3.3.2"
     },
     "swi-titiller": {
-      "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-titiller",
+      "url": "https://github.com/svalbard-watch/swi-titiller",
       "version": "0.1.0"
     },
     "swi-metobs-caching": {
-      "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-caching",
+      "url": "https://github.com/svalbard-watch/swi-metobs-caching",
       "version": "0.1.0"
     },
     "swi-aromearctic-caching": {
-      "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-aromearctic-caching",
+      "url": "https://github.com/svalbard-watch/swi-aromearctic-caching",
       "version": "0.1.0"
     },
     "swi-elevationapi": {
-      "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-elevationapi",
+      "url": "https://github.com/svalbard-watch/swi-elevationapi",
       "version": "1.0.1"
     },
     "swi-frontend": {
-      "url": "https://github.com/UNIS-Svalbard-Weather-Information/swi-frontend",
+      "url": "https://github.com/svalbard-watch/swi-frontend",
       "version": "2.8.0"
     }
   }
