@@ -3,7 +3,7 @@ name: Update component versions
 # Replaces Renovate (which never landed a single bump here - every image-tag change in
 # compose.yml so far was made by hand). Checks every image pinned in the compose files
 # for a newer tag that actually exists in its registry (update_versions.py) and:
-# - our own ghcr.io/unis-svalbard-weather-information/* images: commits the bumps,
+# - our own ghcr.io/svalbard-watch/* images: commits the bumps,
 #   plus the regenerated info/version.json, straight onto the active staging/X.Y.Z
 #   branch - same as Renovate's branch automerge was configured to do. Promoting
 #   staging to pre-prod stays the human gate (ensure-preprod-pr.yml).
@@ -35,6 +35,7 @@ jobs:
       contents: write
       pull-requests: write
       actions: write
+      packages: read   # list tags of private ghcr.io images (e.g. swi-frontend)
     steps:
       - name: Find the active staging branch
         id: staging
@@ -48,16 +49,16 @@ jobs:
           fi
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout ${{ steps.staging.outputs.branch }}
+      - name: Checkout ${{ steps.staging.outputs.branch }}  # zizmor: ignore[artipacked] credentials needed: pushes the version bump branches (git push)
         if: steps.staging.outputs.branch != ''
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ steps.staging.outputs.branch }}
           fetch-depth: 0
 
       - name: Set up Python
         if: steps.staging.outputs.branch != ''
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.13"
 
@@ -68,6 +69,8 @@ jobs:
       - name: Check for new versions
         if: steps.staging.outputs.branch != ''
         id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python update_versions.py --dry-run --summary --json "$RUNNER_TEMP/plan.json"
           echo "internal=$(jq '[.[] | select(.kind == "internal")] | length' "$RUNNER_TEMP/plan.json")" >> "$GITHUB_OUTPUT"
@@ -76,6 +79,8 @@ jobs:
       - name: Apply internal bumps
         if: steps.staging.outputs.branch != '' && !inputs.dry_run && steps.check.outputs.internal != '0'
         id: internal
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python update_versions.py --only internal --json "$RUNNER_TEMP/internal.json"
           if git diff --quiet; then

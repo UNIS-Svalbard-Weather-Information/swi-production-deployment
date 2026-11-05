@@ -45,7 +45,9 @@ hash already in `compose.yml` — a local-only convenience credential, not a rea
 
 ```bash
 cp .env.example .env
-# Then edit .env: set SWI_SERVICE_REPLICAS=1 (see the root README's "Run it locally")
+# Then edit .env: set SWI_MAPPROXY_REPLICAS, SWI_TITILER_REPLICAS and SWI_METOBS_REPLICAS
+# to 1 (see the root README's "Run it locally"), and add portal.localhost to your hosts file
+# and set TRAEFIK_CERT_RESOLVER= (empty) - there is no Let's Encrypt resolver locally.
 # so this starts 1 container per service instead of production's 3 - everything else in
 # .env.example already defaults to *.localhost hosts, fine as-is for local testing.
 docker compose -f compose.yml up -d
@@ -53,8 +55,8 @@ docker compose -f compose.yml up -d
 
 Note: modern Docker Compose (verified with 29.3.1) honors `deploy.replicas` even outside
 Swarm mode — bringing this up with plain `docker compose up` really does start
-`SWI_SERVICE_REPLICAS` copies of mapproxy-server/met-public-api/met-tilling-api (3 if you
-didn't override it). It does *not* honor `update_config` (the `start-first` rolling-update
+`SWI_MAPPROXY_REPLICAS` / `SWI_METOBS_REPLICAS` / `SWI_TITILER_REPLICAS` copies of
+mapproxy-server/met-public-api/met-tilling-api (3 each if you didn't override them). It does *not* honor `update_config` (the `start-first` rolling-update
 behavior), since that's a Swarm scheduler feature with no plain-Compose equivalent. To
 exercise the actual rolling-update behavior, initialize a local single-node Swarm instead
 (`docker swarm init`) and deploy with `docker stack deploy -c compose.yml swi`.
@@ -71,7 +73,7 @@ docker compose ps
 - Met observations API: `https://api.localhost/public/health` (the bare `/public/` root
   404s - neither this API nor Titiller define a root handler, only specific routes)
 - Titiller (tiles): `https://api.localhost/tiles/health`
-- Elevation API: `https://api.localhost/oeapi/v1/lookup?locations=78.22,15.62`
+- Elevation API: `https://api.localhost/oeapi/v1/svalbard?locations=78.22,15.62` (legacy: `/oeapi/v1/lookup`)
 
 (all through the self-signed cert — pass `-k`/`--insecure` with `curl`, or accept the
 browser warning, since it's a local CA)

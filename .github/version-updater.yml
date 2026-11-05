@@ -11,7 +11,7 @@ ignore: []
 images:
   # Tagged by hand as <os>-p<python>-mp<mapproxy>-<version>: only compare the trailing
   # version, whatever base image it was built on.
-  ghcr.io/unis-svalbard-weather-information/swi-mapproxy:
+  ghcr.io/svalbard-watch/swi-mapproxy:
     tag_pattern: '^trixie-p\d+\.\d+-mp\d+\.\d+\.\d+-(?P<version>\d+\.\d+\.\d+)$'
 
   # Third-party images: bumps go through a PR whose body lists these repos' releases.

@@ -67,10 +67,10 @@ def test_traefik_keeps_v_prefix_and_precision():
 def test_split_image():
     assert split_image("redis:7.4-alpine") == ("registry-1.docker.io", "library/redis", "redis", "7.4-alpine")
     assert split_image("traefik:v3.6")[1] == "library/traefik"
-    assert split_image("ghcr.io/unis-svalbard-weather-information/swi-titiller:0.0.3") == (
+    assert split_image("ghcr.io/svalbard-watch/swi-titiller:0.0.3") == (
         "ghcr.io",
-        "unis-svalbard-weather-information/swi-titiller",
-        "ghcr.io/unis-svalbard-weather-information/swi-titiller",
+        "svalbard-watch/swi-titiller",
+        "ghcr.io/svalbard-watch/swi-titiller",
         "0.0.3",
     )
     assert split_image("localhost:5000/foo") is None
@@ -78,7 +78,7 @@ def test_split_image():
 
 
 def test_is_internal():
-    assert is_internal("ghcr.io/unis-svalbard-weather-information/swi-titiller")
+    assert is_internal("ghcr.io/svalbard-watch/swi-titiller")
     assert not is_internal("redis")
     assert not is_internal("ghcr.io/someone-else/swi-titiller")
 

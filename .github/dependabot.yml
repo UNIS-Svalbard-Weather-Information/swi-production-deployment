@@ -1,0 +1,8 @@
+# Copy to .github/dependabot.yml (repositories with workflows but no package manager),
+# add a `docker` block when there is a Dockerfile.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

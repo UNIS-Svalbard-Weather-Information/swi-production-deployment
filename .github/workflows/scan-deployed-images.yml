@@ -1,0 +1,114 @@
+name: Scan deployed images
+
+# Scans every image referenced by compose.yml, not just the ones this organisation
+# builds. A service repository only scans its image when its own CI runs, so a base
+# image fix released later (OpenSSL, libpcre2, ...) would go unnoticed in production;
+# redis and nginx have no CI at all. Runs daily, and on pull requests that change
+# the stack.
+#
+# Images with a current entry in .github/image-scan-exceptions.json are reported but
+# never fail the run. Each exception carries a reason and an end date.
+
+on:
+  schedule:
+    - cron: "30 4 * * *"
+  pull_request:
+    paths:
+      - compose.yml
+      - .github/image-scan-exceptions.json
+      - .github/workflows/scan-deployed-images.yml
+      - scripts/scan_images.py
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # "false": fixable HIGH/CRITICAL findings are listed in the run summary and as
+  # warnings, but never fail the run (report mode). Set to "true" to make findings in
+  # enforced images fail it, which also turns failed scheduled runs into notifications.
+  ENFORCE: "false"
+
+jobs:
+  matrix:
+    name: List the images
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.build.outputs.matrix }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Test the helper script
+        run: python3 -m unittest discover -s tests -p 'test_scan_images.py' -v
+
+      - name: Build the scan matrix from compose.yml
+        id: build
+        run: |
+          set -euo pipefail
+          MATRIX="$(python3 scripts/scan_images.py matrix compose.yml .github/image-scan-exceptions.json)"
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "$MATRIX" | python3 -m json.tool
+
+  scan:
+    name: Scan ${{ matrix.name }} (${{ matrix.mode }})
+    needs: matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read # pull the private swi-frontend image
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
+    env:
+      IMAGE: ${{ matrix.image }}
+      MODE: ${{ matrix.mode }}
+      NOTE: ${{ matrix.note }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Log in to GHCR
+        # swi-frontend is a private package: its "Manage Actions access" setting must
+        # grant this repository read access. Harmless for the public images. The login is
+        # stored per registry in ~/.docker/config.json, which Trivy reads below, so the
+        # token is never offered to Docker Hub for redis and nginx.
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+
+      # Scanned straight from the registry: no pull, no Docker daemon image export (which
+      # cannot export multi-platform images that carry build attestations).
+      - name: Scan with Trivy
+        run: |
+          docker run --rm -v "$HOME/.docker/config.json:/root/.docker/config.json:ro" -v "$PWD:/out" \
+            ghcr.io/aquasecurity/trivy:0.75.0 image --image-src remote --timeout 15m --quiet \
+            --severity HIGH,CRITICAL --ignore-unfixed \
+            --format json --output /out/trivy.json "$IMAGE"
+
+      - name: Report the findings
+        run: |
+          set -euo pipefail
+          {
+            echo "### $IMAGE ($MODE)"
+            if [ -n "$NOTE" ]; then echo "> $NOTE"; fi
+            python3 scripts/scan_images.py summary trivy.json | grep -v '^findings='
+          } >> "$GITHUB_STEP_SUMMARY"
+          COUNT="$(python3 scripts/scan_images.py summary trivy.json | sed -n 's/^findings=//p')"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "::warning title=$IMAGE::$COUNT fixable HIGH/CRITICAL findings ($MODE mode)"
+            if [ "$MODE" = "enforce" ] && [ "$ENFORCE" = "true" ]; then
+              echo "::error::$IMAGE has $COUNT fixable HIGH/CRITICAL findings"
+              exit 1
+            fi
+          fi
