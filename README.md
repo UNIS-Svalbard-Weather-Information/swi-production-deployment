@@ -181,7 +181,7 @@ same shape as the pinned one:
 
 Then, against the newest `staging/*` branch:
 
-- **Our `ghcr.io/unis-svalbard-weather-information/*` images**, majors included:
+- **Our `ghcr.io/svalbard-watch/*` images**, majors included:
   - committed directly as `[BOT] Bump service images: …`, together with the regenerated
     `info/version.json`
   - the pre-prod promotion PR is then (re)opened right away

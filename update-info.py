@@ -27,7 +27,7 @@ def extract_versions_from_compose():
                     if "image" in service:
                         image = service["image"]
                         if isinstance(image, str) and image.startswith(
-                            "ghcr.io/unis-svalbard-weather-information/"
+                            "ghcr.io/svalbard-watch/"
                         ):
                             repo = image.split("/")[-1].split(":")[0]
                             version = image.split(":")[-1] if ":" in image else "latest"
@@ -182,7 +182,7 @@ def update_version_json(versions):
     # Update or add components
     for repo, version in versions.items():
         new_comp[repo] = {
-            "url": f"https://github.com/UNIS-Svalbard-Weather-Information/{repo}",
+            "url": f"https://github.com/svalbard-watch/{repo}",
             "version": version,
         }
 

@@ -1,7 +1,7 @@
 """Find newer image tags for every image pinned in the compose files and apply them.
 
 Replaces Renovate for this repo (see .github/workflows/update-versions.yml):
-- images under ghcr.io/unis-svalbard-weather-information/ are "internal" - the
+- images under ghcr.io/svalbard-watch/ are "internal" - the
   workflow commits their bumps straight onto the active staging/X.Y.Z branch;
 - everything else (redis, traefik, ...) is "external" - the workflow opens one PR per
   image with the upstream release notes, and never commits those directly.
@@ -25,8 +25,8 @@ import urllib.request
 import yaml
 
 CONFIG_PATH = ".github/version-updater.yml"
-ORG_PREFIX = "ghcr.io/unis-svalbard-weather-information/"
-ORG_URL = "https://github.com/UNIS-Svalbard-Weather-Information"
+ORG_PREFIX = "ghcr.io/svalbard-watch/"
+ORG_URL = "https://github.com/svalbard-watch"
 USER_AGENT = "swi-version-updater"
 MAX_NOTES_RELEASES = 15
 MAX_NOTES_BODY = 2000
